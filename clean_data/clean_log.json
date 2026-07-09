@@ -1,0 +1,266 @@
+{
+  "meta": {
+    "generated_at": "2026-07-08 18:57:54 +0800",
+    "script": "clean_data.py",
+    "input_dir": "D:\\coding\\DataPreprocessing\\越城无人机数据+字段描述",
+    "output_dir": "D:\\coding\\DataPreprocessing\\clean_data",
+    "options": {
+      "drop_no_message_time": true,
+      "add_integrity_flags": true
+    }
+  },
+  "sources": {
+    "fly_record": {
+      "file": "越城区无人机飞行服务飞行数据记录信息.csv",
+      "rows": 3298
+    },
+    "fly_telemetry": {
+      "directory": "越城区无人机飞行服务飞行数据上报信息-csv",
+      "file_count": 10,
+      "files": [
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息1.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息10.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息2.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息3.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息4.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息5.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息6.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息7.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息8.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息9.csv",
+          "rows": 10000
+        }
+      ],
+      "rows_merged": 100000
+    },
+    "airport": {
+      "file": "越城区无人机飞行服务机场点位信息1.csv",
+      "rows": 36
+    },
+    "route": {
+      "file": "越城区无人机飞行服务航线信息.csv",
+      "rows": 786
+    }
+  },
+  "pipeline": {
+    "fly_record": {
+      "rows_in": 3298,
+      "rows_out": 3298,
+      "rows_removed": 0,
+      "steps": [
+        {
+          "step": "input",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0
+        },
+        {
+          "step": "filter_not_deleted",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0
+        },
+        {
+          "step": "drop_columns",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0,
+          "columns": [
+            "pilot_id"
+          ]
+        },
+        {
+          "step": "zero_to_null_foreign_keys",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0,
+          "columns": [
+            "mission_id",
+            "task_id",
+            "task_record_id"
+          ]
+        },
+        {
+          "step": "type_conversion",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0
+        }
+      ]
+    },
+    "fly_telemetry": {
+      "rows_in": 100000,
+      "rows_out": 92815,
+      "rows_removed": 7185,
+      "steps": [
+        {
+          "step": "input",
+          "rows_before": 100000,
+          "rows_after": 100000,
+          "removed": 0
+        },
+        {
+          "step": "filter_not_deleted",
+          "rows_before": 100000,
+          "rows_after": 100000,
+          "removed": 0
+        },
+        {
+          "step": "drop_columns",
+          "rows_before": 100000,
+          "rows_after": 100000,
+          "removed": 0,
+          "columns": [
+            "ext_info"
+          ]
+        },
+        {
+          "step": "zero_to_null_mission_id",
+          "rows_before": 100000,
+          "rows_after": 100000,
+          "removed": 0
+        },
+        {
+          "step": "drop_no_message_time",
+          "rows_before": 100000,
+          "rows_after": 92815,
+          "removed": 7185,
+          "reason": "message_time 为空或无法解析"
+        },
+        {
+          "step": "expand_battery_info",
+          "rows_before": 92815,
+          "rows_after": 92815,
+          "removed": 0,
+          "columns_added": 8
+        },
+        {
+          "step": "type_conversion",
+          "rows_before": 92815,
+          "rows_after": 92815,
+          "removed": 0
+        }
+      ]
+    },
+    "airport": {
+      "rows_in": 36,
+      "rows_out": 36,
+      "rows_removed": 0,
+      "steps": [
+        {
+          "step": "input",
+          "rows_before": 36,
+          "rows_after": 36,
+          "removed": 0
+        },
+        {
+          "step": "filter_not_deleted",
+          "rows_before": 36,
+          "rows_after": 36,
+          "removed": 0
+        },
+        {
+          "step": "drop_columns",
+          "rows_before": 36,
+          "rows_after": 36,
+          "removed": 0,
+          "columns": [
+            "update_time",
+            "area_name",
+            "area_code",
+            "model_id"
+          ]
+        },
+        {
+          "step": "type_conversion",
+          "rows_before": 36,
+          "rows_after": 36,
+          "removed": 0
+        }
+      ]
+    },
+    "route": {
+      "rows_in": 786,
+      "rows_out": 786,
+      "rows_removed": 0,
+      "steps": [
+        {
+          "step": "input",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0
+        },
+        {
+          "step": "drop_columns",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0,
+          "columns": [
+            "drone_sub_type",
+            "heading_angle"
+          ]
+        },
+        {
+          "step": "filter_is_delete",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0
+        },
+        {
+          "step": "type_conversion",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0
+        }
+      ]
+    }
+  },
+  "integrity": {
+    "fly_record.mission_id_valid": {
+      "False": 2339,
+      "True": 959
+    },
+    "fly_record.dock_sn_valid": {
+      "True": 3081,
+      "False": 217
+    },
+    "fly_telemetry.fly_record_id_valid": {
+      "True": 68860,
+      "False": 23955
+    },
+    "fly_telemetry.mission_id_valid": {
+      "False": 59706,
+      "True": 33109
+    },
+    "fly_telemetry.valid_gps_points": 92795,
+    "fly_telemetry.distinct_fly_record_ids": 565
+  }
+}

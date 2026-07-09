@@ -1,0 +1,25 @@
+# 原始数据（不上传 GitHub，请本地保留）
+越城无人机数据+字段描述/
+越城无人机数据+字段描述.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+
+# IDE / 系统
+.vscode/
+.idea/
+.DS_Store
+__MACOSX/
+Thumbs.db
+desktop.ini
+
+# 临时文件
+*.log
+*.tmp
+~$*
