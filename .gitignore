@@ -9,7 +9,6 @@ clean_data/*.csv
 dashboard/data.json
 dashboard/map_data.json
 dashboard/dashboard.html
-dashboard/netlify/index.html
 
 # Python
 __pycache__/
