@@ -77,21 +77,21 @@ def simplify_track(coords: list[tuple[float, float]], max_points: int = TRACK_MA
     return [[round(coords[i][0], 6), round(coords[i][1], 6)] for i in indices]
 
 
-def embed_json_in_html(html_path: Path, var_name: str, payload: dict) -> None:
+def strip_embedded_json(html_path: Path, var_name: str) -> None:
+    """移除 HTML 中的内嵌 JSON 常量（保持仓库模板不含业务数据）。"""
     if not html_path.exists():
         return
     text = html_path.read_text(encoding="utf-8")
-    embedded = json.dumps(payload, ensure_ascii=False)
     text, n = re.subn(
-        rf"const {var_name} = .*?;",
-        f"const {var_name} = {embedded};",
+        rf"\n\s*const {var_name} = .*?;\n",
+        "\n",
         text,
         count=1,
         flags=re.DOTALL,
     )
     if n:
         html_path.write_text(text, encoding="utf-8")
-        print(f"已嵌入: {html_path}")
+        print(f"已清理内嵌数据: {html_path}")
 
 
 def _extract_style(html: str) -> str:
@@ -861,12 +861,10 @@ def main() -> None:
     payload = build_payload(tables)
     args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"已写入: {args.output}")
-    embed_json_in_html(dashboard_dir / "index.html", "EMBEDDED_DATA", payload)
 
     map_payload = build_map_payload(tables)
     args.map_output.write_text(json.dumps(map_payload, ensure_ascii=False), encoding="utf-8")
     print(f"已写入: {args.map_output} ({args.map_output.stat().st_size // 1024} KB)")
-    embed_json_in_html(dashboard_dir / "map.html", "EMBEDDED_MAP_DATA", map_payload)
     build_standalone_html(dashboard_dir, payload, map_payload)
 
 
