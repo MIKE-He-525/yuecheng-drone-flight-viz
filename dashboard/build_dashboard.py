@@ -608,6 +608,7 @@ def build_standalone_html(
 
 
 def build_payload(tables: dict[str, pd.DataFrame]) -> dict:
+    """构建总览看板所需的 JSON 结构（KPI、趋势与分布统计）。"""
     rec = tables["fly_record"]
     apt = tables["airport"]
     tel = tables["fly_telemetry"]
