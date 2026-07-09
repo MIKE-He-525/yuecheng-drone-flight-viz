@@ -2,6 +2,9 @@
 越城无人机数据+字段描述/
 越城无人机数据+字段描述.zip
 
+# 清洗结果 CSV（本地运行 clean_data.py 生成）
+clean_data/*.csv
+
 # Python
 __pycache__/
 *.py[cod]

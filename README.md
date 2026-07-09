@@ -46,8 +46,9 @@ python dashboard/build_dashboard.py
 ## 数据说明
 
 - 本仓库**不包含**原始数据目录 `越城无人机数据+字段描述/`，需自行准备。
+- 本仓库**不包含**清洗后 CSV（`clean_data/*.csv`），克隆后请先运行 `python clean_data.py` 生成。
 - 字段定义、实体关系、清洗规则详见 [`数据说明.md`](数据说明.md)。
-- 清洗后数据库说明见 [`clean_data/README.md`](clean_data/README.md)。
+- 清洗后数据库说明见 [`clean_data/README.md`](clean_data/README.md)（随清洗脚本自动更新）。
 
 ## 许可与隐私
 
