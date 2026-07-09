@@ -38,7 +38,8 @@ python dashboard/build_dashboard.py
 ├── visualize.py           # 静态可视化
 ├── dashboard/             # HTML 看板
 │   ├── build_dashboard.py
-│   └── dashboard.html     # 单文件交付物（推荐）
+│   ├── index.html / map.html   # 开发用页面（源码）
+│   └── dashboard.html     # 单文件交付物（本地构建生成）
 ├── clean_data/            # 清洗后 CSV 与日志
 └── 数据说明.md             # 字段说明、清洗规则与进度记录
 ```
