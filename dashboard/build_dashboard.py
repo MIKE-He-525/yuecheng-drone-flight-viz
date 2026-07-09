@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -605,6 +606,22 @@ def build_standalone_html(
     output_path.write_text(html, encoding="utf-8")
     size_kb = output_path.stat().st_size // 1024
     print(f"已写入: {output_path} ({size_kb} KB)")
+    return output_path
+
+
+def build_netlify_deploy(dashboard_dir: Path, standalone_html: Path) -> None:
+    """生成 Netlify 部署包：netlify/index.html + 配置文件。"""
+    netlify_dir = dashboard_dir / "netlify"
+    netlify_dir.mkdir(parents=True, exist_ok=True)
+
+    if not standalone_html.exists():
+        print("跳过 Netlify 打包: 缺少 dashboard.html")
+        return
+
+    dest = netlify_dir / "index.html"
+    shutil.copy2(standalone_html, dest)
+    size_kb = dest.stat().st_size // 1024
+    print(f"已写入: {dest} ({size_kb} KB)")
 
 
 def build_payload(tables: dict[str, pd.DataFrame]) -> dict:
@@ -866,6 +883,7 @@ def main() -> None:
     args.map_output.write_text(json.dumps(map_payload, ensure_ascii=False), encoding="utf-8")
     print(f"已写入: {args.map_output} ({args.map_output.stat().st_size // 1024} KB)")
     build_standalone_html(dashboard_dir, payload, map_payload)
+    build_netlify_deploy(dashboard_dir, dashboard_dir / "dashboard.html")
 
 
 if __name__ == "__main__":

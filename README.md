@@ -6,7 +6,7 @@
 
 - **数据清洗**：`clean_data.py` 将原始 CSV 清洗并输出到 `clean_data/`
 - **静态图表**：`visualize.py` 生成统计 PNG（需联网加载 OSM 底图）
-- **交互看板**：`dashboard/` 含 HTML 模板与构建脚本；`dashboard.html` 为单文件交付物（本地生成）
+- **交互看板**：`dashboard/` 含 HTML 模板与构建脚本；`dashboard.html` 与 `dashboard/netlify/` 为本地生成交付物
 
 ## 环境
 
@@ -25,14 +25,15 @@ python clean_data.py
 # 2. 生成静态图（可选）
 python visualize.py
 
-# 3. 构建看板 JSON 与单文件 HTML
+# 3. 构建看板 JSON、单文件 HTML 与 Netlify 部署包
 python dashboard/build_dashboard.py
 ```
 
 **打开看板：**
 
-- **推荐**：双击 `dashboard/dashboard.html`（单文件，数据内嵌，需联网加载 Chart.js / Leaflet / 地图瓦片）
-- **开发调试**：`index.html` / `map.html` 为纯模板，通过 `fetch` 读取同目录下的 `data.json`、`map_data.json`，需本地 HTTP 服务：
+- **本地**：双击 `dashboard/dashboard.html`
+- **Netlify**：将 `dashboard/netlify/` 文件夹部署到 Netlify（详见 [`dashboard/netlify/README.md`](dashboard/netlify/README.md)）
+- **开发调试**：`index.html` / `map.html` 需本地 HTTP 服务 + `data.json` / `map_data.json`：
 
 ```bash
 cd dashboard
@@ -46,9 +47,10 @@ python -m http.server 8080
 ├── clean_data.py          # 清洗脚本
 ├── visualize.py           # 静态可视化
 ├── dashboard/
-│   ├── build_dashboard.py # 导出 JSON + 生成 dashboard.html
+│   ├── build_dashboard.py # 导出 JSON + dashboard.html + netlify/
 │   ├── index.html         # 总览模板（仓库内无业务数据）
-│   └── map.html           # 地图模板（仓库内无业务数据）
+│   ├── map.html           # 地图模板
+│   └── netlify/           # Netlify 部署目录（index.html 本地生成）
 ├── clean_data/            # 清洗日志与说明（CSV 本地生成）
 └── 数据说明.md
 ```
@@ -63,6 +65,7 @@ python -m http.server 8080
 | `dashboard/data.json` | `python dashboard/build_dashboard.py` |
 | `dashboard/map_data.json` | 同上 |
 | `dashboard/dashboard.html` | 同上 |
+| `dashboard/netlify/index.html` | 同上（Netlify 站点入口） |
 
 克隆后请先准备原始数据并依次运行清洗与构建脚本。
 
