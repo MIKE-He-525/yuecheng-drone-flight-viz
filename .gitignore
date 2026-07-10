@@ -4,6 +4,7 @@
 
 # 清洗结果 CSV（本地运行 clean_data.py 生成）
 clean_data/*.csv
+clean_data/*.xlsx
 
 # 看板数据产物（本地运行 dashboard/build_dashboard.py 生成）
 dashboard/data.json

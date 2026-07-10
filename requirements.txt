@@ -5,3 +5,4 @@ seaborn>=0.13
 geopandas>=0.14
 contextily>=1.4
 shapely>=2.0
+openpyxl>=3.1

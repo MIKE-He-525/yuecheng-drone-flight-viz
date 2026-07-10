@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-07-10 11:54:45 +0800",
+    "generated_at": "2026-07-10 14:17:27 +0800",
     "script": "clean_data.py",
     "input_dir": "D:\\coding\\DataPreprocessing\\越城无人机数据+字段描述",
     "output_dir": "D:\\coding\\DataPreprocessing\\clean_data",
