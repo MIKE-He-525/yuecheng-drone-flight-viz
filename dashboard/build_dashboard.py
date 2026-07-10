@@ -7,25 +7,24 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from geo_utils import compute_admin_gps_stats, district_geojson_for_map, points_in_district
 DEFAULT_DATA_DIR = PROJECT_ROOT / "clean_data"
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "data.json"
 DEFAULT_MAP_OUTPUT = Path(__file__).resolve().parent / "map_data.json"
 
-FACTORY_LABELS = {"DJ": "大疆", "YD": "一电", "ZH": "纵横"}
+FACTORY_LABELS = {"DJ": "大疆", "YD": "一电", "ZH": "纵横", "MMC": "科比特"}
 FLY_TYPE_LABELS = {1: "任务飞行", 2: "自由飞行"}
 DURATION_MAX_MIN = 60
 TRACK_MAX_POINTS = 100
-YUECHENG_BOUNDS = {
-    "lon_min": 120.0,
-    "lon_max": 120.95,
-    "lat_min": 29.45,
-    "lat_max": 30.35,
-}
 
 
 def load_tables(data_dir: Path) -> dict[str, pd.DataFrame]:
@@ -43,13 +42,6 @@ def factory_label(code: object) -> str:
     if pd.isna(code):
         return "未知"
     return FACTORY_LABELS.get(str(code), str(code))
-
-
-def in_yuecheng(lon: float, lat: float) -> bool:
-    return (
-        YUECHENG_BOUNDS["lon_min"] <= lon <= YUECHENG_BOUNDS["lon_max"]
-        and YUECHENG_BOUNDS["lat_min"] <= lat <= YUECHENG_BOUNDS["lat_max"]
-    )
 
 
 def compute_default_view(airports: list[dict]) -> dict:
@@ -208,7 +200,7 @@ def _patch_map_script(script: str) -> str:
     script = script.replace("function initMap()", "function initMapView()")
     script = script.replace("initMap();", "initMapView();")
     script = re.sub(
-        r'\s*\["layer-airports", "layer-coverage", "layer-tracks", "layer-region-only"\]\.forEach\(id => \{.*?\}\);\n',
+        r'\s*\["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"\]\.forEach\(id => \{.*?\}\);\n',
         "\n",
         script,
         count=1,
@@ -416,7 +408,7 @@ ROUTER_SCRIPT = """
     function bindMapUi() {
       if (mapUiBound) return;
       mapUiBound = true;
-      ["layer-airports", "layer-coverage", "layer-tracks", "layer-region-only"].forEach(id => {
+      ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
         document.getElementById(id)?.addEventListener("change", refreshLayers);
       });
       document.getElementById("btn-reset-view")?.addEventListener("click", fitDefaultView);
@@ -644,7 +636,9 @@ def build_payload(tables: dict[str, pd.DataFrame]) -> dict:
 
     valid_tel = tel.dropna(subset=["longitude", "latitude", "fly_record_id"])
     valid_tel = valid_tel[(valid_tel["longitude"] != 0) | (valid_tel["latitude"] != 0)]
-    tracks_count = int(valid_tel["fly_record_id"].nunique())
+    track_sizes = valid_tel.groupby("fly_record_id").size()
+    tracks_drawable = int((track_sizes >= 2).sum())
+    telemetry_valid = int(len(valid_tel))
 
     return {
         "meta": {
@@ -653,13 +647,18 @@ def build_payload(tables: dict[str, pd.DataFrame]) -> dict:
                 "start": rec["real_start_time"].min().strftime("%Y-%m-%d"),
                 "end": rec["real_start_time"].max().strftime("%Y-%m-%d"),
             },
+            "kpi_notes": {
+                "telemetry": "有效 GPS 点：经纬度非空且非 (0,0)",
+                "tracks_with_telemetry": "至少 2 个有效 GPS 点，可绘制轨迹",
+            },
         },
         "kpis": {
             "flights": int(len(rec)),
             "airports": int(len(apt)),
-            "telemetry": int(len(tel)),
+            "telemetry": telemetry_valid,
+            "telemetry_total_rows": int(len(tel)),
             "routes": int(len(route)),
-            "tracks_with_telemetry": tracks_count,
+            "tracks_with_telemetry": tracks_drawable,
         },
         "monthly": {
             "labels": monthly["month"].tolist(),
@@ -718,7 +717,6 @@ def build_map_payload(tables: dict[str, pd.DataFrame]) -> dict:
                 "labels": str(row["labels"]) if pd.notna(row.get("labels")) else "",
                 "firmware_version": str(row["firmware_version"]) if pd.notna(row.get("firmware_version")) else "",
                 "flight_count": int(flights_by_dock.get(device_sn, 0)),
-                "in_region": in_yuecheng(lon, lat),
             }
         )
 
@@ -728,9 +726,16 @@ def build_map_payload(tables: dict[str, pd.DataFrame]) -> dict:
     valid_tel = valid_tel[(valid_tel["longitude"] != 0) | (valid_tel["latitude"] != 0)]
     valid_tel["message_time"] = pd.to_datetime(valid_tel["message_time"], errors="coerce")
 
-    tel_in_region = valid_tel.apply(
-        lambda r: in_yuecheng(float(r["longitude"]), float(r["latitude"])),
-        axis=1,
+    tel_in_district = pd.Series(
+        points_in_district(
+            valid_tel["longitude"].astype(float),
+            valid_tel["latitude"].astype(float),
+        ).values,
+        index=valid_tel.index,
+    )
+    admin_stats = compute_admin_gps_stats(
+        valid_tel["longitude"].astype(float),
+        valid_tel["latitude"].astype(float),
     )
 
     tracks: list[dict] = []
@@ -745,7 +750,7 @@ def build_map_payload(tables: dict[str, pd.DataFrame]) -> dict:
             "id": int(fid),
             "coords": coords,
             "point_count": int(len(group)),
-            "in_region_ratio": round(float(tel_in_region.loc[group.index].mean()), 3),
+            "in_district_ratio": round(float(tel_in_district.loc[group.index].mean()), 3),
         }
 
         if int(fid) in rec_lookup.index:
@@ -815,13 +820,17 @@ def build_map_payload(tables: dict[str, pd.DataFrame]) -> dict:
                 "northeast": [round(max(all_lats), 4), round(max(all_lons), 4)],
             },
             "default_view": compute_default_view(airports),
-            "yuecheng_bounds": YUECHENG_BOUNDS,
+            "district_name": admin_stats.get("district_name", "越城区"),
+            "district_adcode": admin_stats.get("district_adcode", 330602),
+            "district_boundary": district_geojson_for_map(),
         },
         "kpis": {
             "airports": len(airports),
             "tracks": len(tracks),
             "telemetry_points": int(len(valid_tel)),
-            "telemetry_in_region": int(tel_in_region.sum()),
+            "telemetry_in_district": int(admin_stats["in_district_points"]),
+            "telemetry_out_of_district": int(admin_stats["out_of_district_points"]),
+            "telemetry_in_district_pct": admin_stats["in_district_pct"],
             "routes": int(len(route)),
             "flights_total": int(len(rec)),
         },

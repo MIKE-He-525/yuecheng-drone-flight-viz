@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-07-08 18:57:54 +0800",
+    "generated_at": "2026-07-10 11:54:45 +0800",
     "input_dir": "D:\\coding\\DataPreprocessing\\越城无人机数据+字段描述",
     "output_dir": "D:\\coding\\DataPreprocessing\\clean_data",
     "options": {
@@ -333,7 +333,7 @@
         "distance": "float64",
         "head_mode": "Int64",
         "gimbal_pitch_mode": "Int64",
-        "pitch": "int64",
+        "pitch": "float64",
         "finish_action": "Int64",
         "cjsj": "datetime64[us]",
         "is_delete": "Int64"
@@ -343,7 +343,7 @@
         "mission_code": 71,
         "creat_type": 0,
         "org_id": 275,
-        "mission_version": 0,
+        "mission_version": 301,
         "factory_code": 81,
         "factory_name": 81,
         "company": 81,
@@ -351,12 +351,12 @@
         "device_model_id": 453,
         "type": 0,
         "mission_type": 0,
-        "mission_application": 0,
-        "endurance": 0,
-        "distance": 0,
+        "mission_application": 761,
+        "endurance": 65,
+        "distance": 65,
         "head_mode": 0,
         "gimbal_pitch_mode": 0,
-        "pitch": 0,
+        "pitch": 630,
         "finish_action": 0,
         "cjsj": 0,
         "is_delete": 0

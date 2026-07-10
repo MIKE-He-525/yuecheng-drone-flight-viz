@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-07-08 18:57:54 +0800",
+    "generated_at": "2026-07-10 11:54:45 +0800",
     "script": "clean_data.py",
     "input_dir": "D:\\coding\\DataPreprocessing\\越城无人机数据+字段描述",
     "output_dir": "D:\\coding\\DataPreprocessing\\clean_data",
@@ -235,6 +235,27 @@
           "removed": 0
         },
         {
+          "step": "zero_to_null_sentinel_int",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0,
+          "columns": {
+            "mission_version": 301,
+            "mission_application": 761
+          }
+        },
+        {
+          "step": "zero_to_null_sentinel_float",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0,
+          "columns": {
+            "endurance": 65,
+            "distance": 65,
+            "pitch": 630
+          }
+        },
+        {
           "step": "type_conversion",
           "rows_before": 786,
           "rows_after": 786,
@@ -262,5 +283,125 @@
     },
     "fly_telemetry.valid_gps_points": 92795,
     "fly_telemetry.distinct_fly_record_ids": 565
+  },
+  "quality": {
+    "policy": {
+      "fly_record_id": "保留全部遥测行，不删除 fly_record_id 无法关联 fly_record.id 的记录；添加布尔列 fly_record_id_valid 供下游过滤。（对应 数据说明.md 7.6：可选排除，默认仅标注）",
+      "endurance_mission_fields": "route 表 endurance / distance / mission_version / mission_application 的哨兵值 0 清洗为 NULL，保留行。"
+    },
+    "fields": {
+      "route.endurance": {
+        "null": 65,
+        "non_null": 721,
+        "null_pct": 8.3
+      },
+      "route.distance": {
+        "null": 65,
+        "non_null": 721,
+        "null_pct": 8.3
+      },
+      "route.mission_version": {
+        "null": 301,
+        "non_null": 485,
+        "null_pct": 38.3
+      },
+      "route.mission_application": {
+        "null": 761,
+        "non_null": 25,
+        "null_pct": 96.8
+      },
+      "route.factory_code": {
+        "null": 81,
+        "non_null": 705,
+        "null_pct": 10.3
+      },
+      "fly_record.factory_code": {
+        "null": 12,
+        "non_null": 3286,
+        "null_pct": 0.4
+      },
+      "fly_record.mission_id": {
+        "null": 2072,
+        "non_null": 1226,
+        "null_pct": 62.8
+      },
+      "fly_record.dock_sn": {
+        "null": 112,
+        "non_null": 3186,
+        "null_pct": 3.4
+      },
+      "airport.factory_code": {
+        "null": 0,
+        "non_null": 36,
+        "null_pct": 0.0
+      },
+      "fly_record.factory_code_values": {
+        "YD": 2244,
+        "DJ": 1042,
+        "NULL": 12
+      },
+      "airport.factory_code_values": {
+        "DJ": 15,
+        "YD": 13,
+        "ZH": 8
+      },
+      "route.factory_code_values": {
+        "DJ": 433,
+        "YD": 272,
+        "NULL": 81
+      }
+    },
+    "rows": {
+      "fly_telemetry.invalid_fly_record_id": {
+        "invalid_rows": 23955,
+        "invalid_pct": 25.8,
+        "distinct_invalid_ids": 213,
+        "sample_invalid_ids": [
+          132,
+          133,
+          134,
+          135,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          148,
+          149,
+          150,
+          151,
+          152
+        ]
+      },
+      "fly_telemetry.invalid_mission_id": {
+        "rows_with_mission_id": 51494,
+        "invalid_mission_id_rows": 18385
+      }
+    },
+    "gps": {
+      "telemetry_rows_total": 92815,
+      "rows_missing_gps": 0,
+      "zero_zero_points": 20,
+      "valid_gps_points": 92795,
+      "distinct_fly_record_ids_valid_gps": 564,
+      "tracks_with_ge_2_points": 563,
+      "tracks_with_1_point": 1,
+      "note": "有效 GPS = 经纬度非空且非 (0,0)。看板「轨迹」数 = tracks_with_ge_2_points（至少 2 点方可画线）。行政区内/外见 admin。"
+    },
+    "admin": {
+      "district_adcode": 330602,
+      "district_name": "越城区",
+      "geojson_file": "yuecheng_330602.geojson",
+      "valid_gps_points": 92795,
+      "in_district_points": 79014,
+      "out_of_district_points": 13781,
+      "in_district_pct": 85.1
+    }
   }
 }

@@ -44,6 +44,8 @@ FILE_ROUTE = "越城区无人机飞行服务航线信息.csv"
 DIR_TELEMETRY = "越城区无人机飞行服务飞行数据上报信息-csv"
 TELEMETRY_GLOB = "越城区无人机飞行服务飞行数据上报信息*.csv"
 
+FACTORY_LABELS = {"DJ": "大疆", "YD": "一电", "ZH": "纵横", "MMC": "科比特"}
+
 # ---------------------------------------------------------------------------
 # 日志
 # ---------------------------------------------------------------------------
@@ -85,6 +87,12 @@ def zero_to_null(series: pd.Series) -> pd.Series:
     """将哨兵值 0 / 0.0 转为 NaN（用于外键字段）。"""
     numeric = pd.to_numeric(series, errors="coerce")
     return series.mask(numeric == 0)
+
+
+def zero_float_to_null(series: pd.Series) -> pd.Series:
+    """将浮点列中的哨兵值 0 转为 NaN（如 endurance、distance）。"""
+    numeric = to_float(series)
+    return numeric.mask(numeric == 0)
 
 
 def drop_all_null_columns(
@@ -383,9 +391,25 @@ def clean_route(
         if col in df.columns:
             df[col] = to_nullable_int(df[col])
 
+    sentinel_int_cols = ["mission_version", "mission_application"]
+    sentinel_details: dict[str, int] = {}
+    for col in sentinel_int_cols:
+        if col in df.columns:
+            zeros = int((pd.to_numeric(df[col], errors="coerce") == 0).sum())
+            df[col] = zero_to_null(df[col].astype("string"))
+            df[col] = to_nullable_int(df[col])
+            sentinel_details[col] = zeros
+    if sentinel_details:
+        record_step(log, "zero_to_null_sentinel_int", len(df), len(df), columns=sentinel_details)
+
+    sentinel_float_details: dict[str, int] = {}
     for col in ["endurance", "distance", "pitch"]:
         if col in df.columns:
-            df[col] = to_float(df[col])
+            zeros = int((pd.to_numeric(df[col], errors="coerce") == 0).sum())
+            df[col] = zero_float_to_null(df[col])
+            sentinel_float_details[col] = zeros
+    if sentinel_float_details:
+        record_step(log, "zero_to_null_sentinel_float", len(df), len(df), columns=sentinel_float_details)
 
     if "cjsj" in df.columns:
         df["cjsj"] = to_datetime(df["cjsj"])
@@ -453,6 +477,153 @@ def compute_integrity_stats(
     stats["fly_telemetry.distinct_fly_record_ids"] = int(telemetry["fly_record_id"].nunique())
 
     return stats
+
+
+def compute_quality_report(
+    record: pd.DataFrame,
+    telemetry: pd.DataFrame,
+    airport: pd.DataFrame,
+    route: pd.DataFrame,
+) -> dict[str, Any]:
+    """字段级 / 行级质量统计（写入 clean_log.json 的 quality 段）。"""
+    report: dict[str, Any] = {
+        "policy": {
+            "fly_record_id": (
+                "保留全部遥测行，不删除 fly_record_id 无法关联 fly_record.id 的记录；"
+                "添加布尔列 fly_record_id_valid 供下游过滤。"
+                "（对应 数据说明.md 7.6：可选排除，默认仅标注）"
+            ),
+            "endurance_mission_fields": (
+                "route 表 endurance / distance / mission_version / mission_application "
+                "的哨兵值 0 清洗为 NULL，保留行。"
+            ),
+        },
+        "fields": {},
+        "rows": {},
+        "gps": {},
+    }
+
+    for table_name, df, cols in (
+        ("route", route, ["endurance", "distance", "mission_version", "mission_application", "factory_code"]),
+        ("fly_record", record, ["factory_code", "mission_id", "dock_sn"]),
+        ("airport", airport, ["factory_code"]),
+    ):
+        for col in cols:
+            if col not in df.columns:
+                continue
+            null_n = int(df[col].isna().sum())
+            report["fields"][f"{table_name}.{col}"] = {
+                "null": null_n,
+                "non_null": int(len(df) - null_n),
+                "null_pct": round(null_n / len(df) * 100, 1) if len(df) else 0,
+            }
+
+    if "fly_record_id_valid" in telemetry.columns:
+        invalid = telemetry[~telemetry["fly_record_id_valid"].fillna(False)]
+        invalid_ids = invalid["fly_record_id"].dropna().unique()
+        sample_ids = sorted(int(x) for x in invalid_ids[:20])
+        report["rows"]["fly_telemetry.invalid_fly_record_id"] = {
+            "invalid_rows": int(len(invalid)),
+            "invalid_pct": round(len(invalid) / len(telemetry) * 100, 1) if len(telemetry) else 0,
+            "distinct_invalid_ids": int(len(invalid_ids)),
+            "sample_invalid_ids": sample_ids,
+        }
+
+    if "mission_id_valid" in telemetry.columns:
+        bad = telemetry[~telemetry["mission_id_valid"].fillna(False) & telemetry["mission_id"].notna()]
+        report["rows"]["fly_telemetry.invalid_mission_id"] = {
+            "rows_with_mission_id": int(telemetry["mission_id"].notna().sum()),
+            "invalid_mission_id_rows": int(len(bad)),
+        }
+
+    tel = telemetry.copy()
+    tel["longitude"] = pd.to_numeric(tel["longitude"], errors="coerce")
+    tel["latitude"] = pd.to_numeric(tel["latitude"], errors="coerce")
+    has_gps = tel.dropna(subset=["longitude", "latitude"])
+    zero_zero = has_gps[(has_gps["longitude"] == 0) & (has_gps["latitude"] == 0)]
+    valid_gps = has_gps[~((has_gps["longitude"] == 0) & (has_gps["latitude"] == 0))]
+    track_sizes = valid_gps.groupby("fly_record_id").size()
+    report["gps"] = {
+        "telemetry_rows_total": int(len(telemetry)),
+        "rows_missing_gps": int(len(telemetry) - len(has_gps)),
+        "zero_zero_points": int(len(zero_zero)),
+        "valid_gps_points": int(len(valid_gps)),
+        "distinct_fly_record_ids_valid_gps": int(valid_gps["fly_record_id"].nunique()),
+        "tracks_with_ge_2_points": int((track_sizes >= 2).sum()),
+        "tracks_with_1_point": int((track_sizes == 1).sum()),
+        "note": (
+            "有效 GPS = 经纬度非空且非 (0,0)。"
+            "看板「轨迹」数 = tracks_with_ge_2_points（至少 2 点方可画线）。"
+            "行政区内/外见 admin。"
+        ),
+    }
+
+    try:
+        from geo_utils import compute_admin_gps_stats
+
+        report["admin"] = compute_admin_gps_stats(
+            valid_gps["longitude"].astype(float),
+            valid_gps["latitude"].astype(float),
+        )
+    except FileNotFoundError as exc:
+        report["admin"] = {"error": str(exc)}
+
+    for table_name, df in (("fly_record", record), ("airport", airport), ("route", route)):
+        if "factory_code" not in df.columns:
+            continue
+        vc = df["factory_code"].fillna("NULL").astype(str).value_counts()
+        report["fields"][f"{table_name}.factory_code_values"] = {
+            str(k): int(v) for k, v in vc.items()
+        }
+
+    return report
+
+
+def append_quality_report_txt(log_path: Path, quality: dict[str, Any]) -> None:
+    """在 clean_log.txt 末尾追加可读的质量统计。"""
+    lines = [
+        "",
+        "=" * 60,
+        "字段 / 行级质量统计（quality）",
+        "=" * 60,
+        "",
+        "【策略】",
+        f"- fly_record_id: {quality['policy']['fly_record_id']}",
+        f"- endurance 等: {quality['policy']['endurance_mission_fields']}",
+        "",
+    ]
+
+    if quality.get("rows"):
+        lines.append("【行级】")
+        for key, val in quality["rows"].items():
+            lines.append(f"- {key}:")
+            for k, v in val.items():
+                lines.append(f"    {k}: {v}")
+        lines.append("")
+
+    if quality.get("gps"):
+        lines.append("【GPS / 轨迹】")
+        for k, v in quality["gps"].items():
+            lines.append(f"- {k}: {v}")
+        lines.append("")
+
+    if quality.get("admin"):
+        lines.append("【行政区内 / 外（越城区 330602）】")
+        for k, v in quality["admin"].items():
+            lines.append(f"- {k}: {v}")
+        lines.append("")
+
+    if quality.get("fields"):
+        lines.append("【字段空值 / 厂商分布】（节选）")
+        for key in sorted(quality["fields"]):
+            if key.endswith("_values"):
+                lines.append(f"- {key}: {quality['fields'][key]}")
+            elif any(x in key for x in ("endurance", "mission_version", "mission_application", "factory_code")):
+                lines.append(f"- {key}: {quality['fields'][key]}")
+        lines.append("")
+
+    with log_path.open("a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -722,6 +893,9 @@ def run(
             fly_record, fly_telemetry, airport, route,
         )
         clean_log["integrity"] = compute_integrity_stats(fly_record, fly_telemetry)
+        clean_log["quality"] = compute_quality_report(
+            fly_record, fly_telemetry, airport, route,
+        )
 
     for name, steps, rows_in, df in [
         ("fly_record", record_log, len(raw_record), fly_record),
@@ -743,6 +917,8 @@ def run(
         "route": route,
     }
     summary = save_outputs(tables, output_dir, clean_log)
+    if clean_log.get("quality"):
+        append_quality_report_txt(log_txt_path, clean_log["quality"])
     logger.info("清洗完成。")
     return summary
 

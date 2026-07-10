@@ -249,7 +249,8 @@
           <label><input type="checkbox" id="layer-airports" checked /> 机场点位（全部）</label>
           <label><input type="checkbox" id="layer-coverage" checked /> 机场覆盖半径</label>
           <label><input type="checkbox" id="layer-tracks" checked /> 飞行轨迹（全部有效遥测）</label>
-          <label><input type="checkbox" id="layer-region-only" /> 仅显示越城区范围内轨迹</label>
+          <label><input type="checkbox" id="layer-district" checked /> 显示越城区行政区划</label>
+          <label><input type="checkbox" id="layer-region-only" /> 仅显示行政区内轨迹</label>
         </div>
         <div class="filter-row" id="factory-filters"></div>
         <button type="button" class="filter-btn" id="btn-reset-view" style="margin-top:8px;width:100%;">重置默认视野</button>
@@ -269,6 +270,7 @@
         <div><span class="dot" style="background:#E74C3C"></span>大疆机场/轨迹</div>
         <div><span class="dot" style="background:#3498DB"></span>一电机场/轨迹</div>
         <div><span class="dot" style="background:#2ECC71"></span>纵横机场/轨迹</div>
+        <div><span class="line-sample" style="background:transparent;border:2px solid #E67E22;height:0"></span>越城区行政区划</div>
         <div><span class="line-sample" style="background:#95A5A6"></span>无记录关联轨迹</div>
       </div>
     </main>
@@ -293,6 +295,7 @@
     let airportLayer = null;
     let coverageLayer = null;
     let trackLayer = null;
+    let districtLayer = null;
     let trackPolylines = new Map();
     let activeFactory = "all";
     let selectedTrackId = null;
@@ -330,14 +333,20 @@
 
     function renderKPIs() {
       const k = MAP_DATA.kpis;
-      const pct = k.telemetry_points ? Math.round(k.telemetry_in_region / k.telemetry_points * 100) : 0;
+      const adminPct = k.telemetry_in_district_pct != null
+        ? k.telemetry_in_district_pct
+        : (k.telemetry_points ? Math.round((k.telemetry_in_district || 0) / k.telemetry_points * 1000) / 10 : 0);
       document.getElementById("kpi-mini").innerHTML = `
         <div><div class="lbl">机场</div><div class="val">${k.airports}</div></div>
         <div><div class="lbl">轨迹</div><div class="val">${k.tracks}</div></div>
         <div><div class="lbl">遥测点</div><div class="val">${k.telemetry_points.toLocaleString()}</div></div>
-        <div><div class="lbl">范围内</div><div class="val">${pct}%</div></div>
+        <div><div class="lbl">行政内</div><div class="val">${adminPct}%</div></div>
         <div><div class="lbl">飞行记录</div><div class="val">${k.flights_total.toLocaleString()}</div></div>
         <div><div class="lbl">预定义航线</div><div class="val">${k.routes}</div></div>
+        <div class="bounds-note" style="grid-column:1/-1;font-size:0.62rem;color:var(--muted);line-height:1.4;padding-top:2px;border-top:1px dashed var(--border)">
+          行政内：${MAP_DATA.meta.district_name || "越城区"}（adcode ${MAP_DATA.meta.district_adcode || 330602}）<br>
+          行政内 ${(k.telemetry_in_district || 0).toLocaleString()} 点 · 行政外 ${(k.telemetry_out_of_district || 0).toLocaleString()} 点
+        </div>
       `;
       const rs = MAP_DATA.routes.distance_km;
       document.getElementById("route-stats").textContent =
@@ -412,7 +421,7 @@
         ${t.task_name ? "任务：" + t.task_name + "<br>" : ""}
         厂商：${t.factory}<br>
         ${t.airport_name ? "起飞机场：" + t.airport_name + "<br>" : ""}
-        遥测点：${t.point_count}（范围内 ${Math.round(t.in_region_ratio * 100)}%）<br>
+        遥测点：${t.point_count}（行政内 ${Math.round((t.in_district_ratio ?? 0) * 100)}%）<br>
         ${t.duration_min != null ? "时长：" + t.duration_min + " 分钟<br>" : ""}
         ${t.distance_m != null ? "距离：" + t.distance_m + " m<br>" : ""}
         ${t.start_time ? "起飞：" + t.start_time + "<br>" : ""}
@@ -426,7 +435,7 @@
 
     function matchRegion(t) {
       if (!document.getElementById("layer-region-only").checked) return true;
-      return t.in_region_ratio >= 0.5;
+      return (t.in_district_ratio ?? 0) >= 0.5;
     }
 
     function fitDefaultView() {
@@ -443,11 +452,30 @@
       airportLayer = L.layerGroup().addTo(map);
       coverageLayer = L.layerGroup().addTo(map);
       trackLayer = L.layerGroup().addTo(map);
+      districtLayer = L.layerGroup().addTo(map);
       refreshLayers();
       setTimeout(() => map.invalidateSize(), 0);
     }
 
     window.addEventListener("resize", () => { if (map) map.invalidateSize(); });
+
+    function refreshDistrictLayer() {
+      if (!districtLayer) return;
+      districtLayer.clearLayers();
+      if (!document.getElementById("layer-district")?.checked) return;
+      const geo = MAP_DATA.meta.district_boundary;
+      if (!geo) return;
+      L.geoJSON(geo, {
+        style: {
+          color: "#E67E22",
+          weight: 2,
+          fillColor: "#E67E22",
+          fillOpacity: 0.06,
+        },
+      }).bindPopup(
+        `<b>${MAP_DATA.meta.district_name || "越城区"}</b><br>看板「行政内」KPI 按此行政区划面统计`,
+      ).addTo(districtLayer);
+    }
 
     function refreshLayers() {
       airportLayer.clearLayers();
@@ -513,6 +541,7 @@
           }
         });
       }
+      refreshDistrictLayer();
     }
 
     function clearTrackSelection() {
@@ -579,7 +608,7 @@
       btn.addEventListener("click", () => setTheme(btn.dataset.theme));
     });
 
-    ["layer-airports", "layer-coverage", "layer-tracks", "layer-region-only"].forEach(id => {
+    ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
       document.getElementById(id).addEventListener("change", refreshLayers);
     });
     document.getElementById("btn-reset-view").addEventListener("click", fitDefaultView);

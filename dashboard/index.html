@@ -312,7 +312,7 @@
     const KPI_META = [
       { key: "flights", label: "飞行记录", icon: "✈" },
       { key: "airports", label: "机场点位", icon: "⌂" },
-      { key: "telemetry", label: "遥测点数", icon: "◎" },
+      { key: "telemetry", label: "有效遥测点", icon: "◎" },
       { key: "routes", label: "预定义航线", icon: "⤴" },
     ];
 
@@ -434,6 +434,7 @@
         options: { ...opts, plugins: { ...opts.plugins, legend: { display: false } } },
       });
 
+      const factoryAptColors = { "大疆": accent2, "一电": accent, "纵横": colors[2] };
       charts.factoryApt = new Chart(document.getElementById("chart-factory-apt"), {
         type: "bar",
         data: {
@@ -441,7 +442,7 @@
           datasets: [{
             label: "设备数量",
             data: Object.values(DATA.factory_airport),
-            backgroundColor: [accent2, accent, colors[2], colors[3]].slice(0, Object.keys(DATA.factory_airport).length),
+            backgroundColor: Object.keys(DATA.factory_airport).map(k => factoryAptColors[k] || colors[3]),
             borderRadius: 4,
           }],
         },
