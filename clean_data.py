@@ -326,6 +326,39 @@ def clean_fly_telemetry(
         )
 
     record_step(log, "type_conversion", len(df), len(df))
+
+    if {"longitude", "latitude"}.issubset(df.columns):
+        n = len(df)
+        lon = pd.to_numeric(df["longitude"], errors="coerce")
+        lat = pd.to_numeric(df["latitude"], errors="coerce")
+        has_gps = lon.notna() & lat.notna()
+        zero_zero = has_gps & (lon == 0) & (lat == 0)
+        missing_gps = ~has_gps
+        valid_gps = has_gps & ~zero_zero
+        zero_n = int(zero_zero.sum())
+        valid_n = int(valid_gps.sum())
+        missing_n = int(missing_gps.sum())
+        record_step(
+            log,
+            "audit_zero_zero_gps",
+            n,
+            n,
+            reason=(
+                f"经纬度 (0,0) 视为无效 GPS，不删除行；"
+                f"无效 {zero_n} 条，缺失经纬度 {missing_n} 条，有效 GPS {valid_n} 条"
+            ),
+            columns=["longitude", "latitude"],
+            zero_zero_points=zero_n,
+            rows_missing_gps=missing_n,
+            valid_gps_points=valid_n,
+        )
+        if zero_n:
+            logger.info(
+                "  (0,0) 无效 GPS: %d 条（保留在 CSV；有效 GPS %d 条）",
+                zero_n,
+                valid_n,
+            )
+
     return df
 
 

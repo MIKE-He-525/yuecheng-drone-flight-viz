@@ -95,7 +95,7 @@ def flatten_dict(d: dict[str, Any], prefix: str = "") -> list[dict[str, Any]]:
     return rows
 
 
-def pipeline_steps_df(pipeline: dict[str, Any]) -> pd.DataFrame:
+def pipeline_steps_df(pipeline: dict[str, Any], quality: dict[str, Any] | None = None) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for table, info in pipeline.items():
         for step in info.get("steps", []):
@@ -111,8 +111,41 @@ def pipeline_steps_df(pipeline: dict[str, Any]) -> pd.DataFrame:
                 row["涉及列"] = ", ".join(cols) if isinstance(cols, list) else json.dumps(cols, ensure_ascii=False)
             if "reason" in step:
                 row["说明"] = step["reason"]
+            elif step.get("zero_zero_points") is not None:
+                row["说明"] = (
+                    f"(0,0) 无效 GPS {step['zero_zero_points']} 条；"
+                    f"有效 GPS {step.get('valid_gps_points', '—')} 条（不删行）"
+                )
             rows.append(row)
-    return pd.DataFrame(rows)
+
+    df = pd.DataFrame(rows)
+    gps = (quality or {}).get("gps", {})
+    tel_steps = pipeline.get("fly_telemetry", {}).get("steps", [])
+    if gps.get("zero_zero_points") is not None and not any(
+        s.get("step") == "audit_zero_zero_gps" for s in tel_steps
+    ):
+        total = int(gps.get("telemetry_rows_total", 0))
+        zero = int(gps["zero_zero_points"])
+        valid = int(gps.get("valid_gps_points", total - zero))
+        extra = pd.DataFrame(
+            [
+                {
+                    "表": "fly_telemetry",
+                    "步骤": "audit_zero_zero_gps",
+                    "清洗前": total,
+                    "清洗后": total,
+                    "删除行数": 0,
+                    "涉及列": "longitude, latitude",
+                    "说明": (
+                        f"识别经纬度 (0,0) 无效 GPS 共 {zero} 条，"
+                        f"从有效 GPS 统计中排除（有效 {valid} 条）；"
+                        f"行仍保留在 CSV，共 {total} 行"
+                    ),
+                }
+            ]
+        )
+        df = pd.concat([df, extra], ignore_index=True)
+    return df
 
 
 def integrity_df(integrity: dict[str, Any]) -> pd.DataFrame:
@@ -236,6 +269,132 @@ def gap_rules(md_text: str) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def table_overview_df(counts: dict[str, int], quality: dict[str, Any]) -> pd.DataFrame:
+    """清洗后表行数；fly_telemetry 单独标注 CSV 行数 vs 有效 GPS 口径。"""
+    gps = quality.get("gps", {})
+    rows: list[dict[str, Any]] = []
+    for name, row_count in counts.items():
+        row: dict[str, Any] = {
+            "表": name,
+            "清洗后行数(CSV)": row_count,
+            "CSV文件": f"{name}.csv",
+            "有效GPS行数": "",
+            "其中(0,0)无效点": "",
+            "说明": "",
+        }
+        if name == "fly_telemetry":
+            total = int(gps.get("telemetry_rows_total", row_count))
+            valid = gps.get("valid_gps_points")
+            zero = gps.get("zero_zero_points")
+            missing = gps.get("rows_missing_gps", 0)
+            row["有效GPS行数"] = valid
+            row["其中(0,0)无效点"] = zero
+            row["说明"] = (
+                f"CSV 共 {total} 行；看板「有效遥测点」= {valid} "
+                f"（= {total} - 缺失经纬度 {missing} - (0,0) 无效 {zero}；"
+                f"无效 GPS 行仍保留在 CSV，见工作表「18b_(0,0)GPS明细」）"
+            )
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def gps_quality_summary_df(gps: dict[str, Any]) -> pd.DataFrame:
+    """GPS/轨迹质量指标（含 92815 与 92795 的验算说明）。"""
+    total = int(gps.get("telemetry_rows_total", 0))
+    missing = int(gps.get("rows_missing_gps", 0))
+    zero = int(gps.get("zero_zero_points", 0))
+    valid = int(gps.get("valid_gps_points", 0))
+    rows = [
+        {
+            "指标": "遥测 CSV 总行 (telemetry_rows_total)",
+            "值": total,
+            "说明": "clean_data/fly_telemetry.csv 清洗后行数；对应 KPI 字段 telemetry_total_rows",
+        },
+        {
+            "指标": "缺失经纬度 (rows_missing_gps)",
+            "值": missing,
+            "说明": "longitude 或 latitude 为空",
+        },
+        {
+            "指标": "(0,0) 无效 GPS (zero_zero_points)",
+            "值": zero,
+            "说明": "经纬度均为 0，视为无有效定位；不参与看板统计与轨迹绘制，行仍保留在 CSV",
+        },
+        {
+            "指标": "有效 GPS 点 (valid_gps_points)",
+            "值": valid,
+            "说明": "看板 KPI「有效遥测点」；经纬度非空且非 (0,0)",
+        },
+        {
+            "指标": "验算：CSV 总行 - 缺失 - (0,0)",
+            "值": f"{total} - {missing} - {zero} = {valid}",
+            "说明": "与有效 GPS 点一致" if total - missing - zero == valid else "请核对 clean_log",
+        },
+        {
+            "指标": "有效 GPS 对应 fly_record_id 数",
+            "值": gps.get("distinct_fly_record_ids_valid_gps"),
+            "说明": "至少有一条有效 GPS 的飞行 id 去重数",
+        },
+        {
+            "指标": "可绘制轨迹数 (tracks_with_ge_2_points)",
+            "值": gps.get("tracks_with_ge_2_points"),
+            "说明": "至少 2 个有效 GPS 点，看板地图「轨迹」KPI",
+        },
+        {
+            "指标": "仅 1 个有效 GPS 的 fly_record_id",
+            "值": gps.get("tracks_with_1_point"),
+            "说明": "有 GPS 但不足以画线",
+        },
+    ]
+    note = gps.get("note")
+    if note:
+        rows.append({"指标": "备注", "值": note, "说明": ""})
+    return pd.DataFrame(rows)
+
+
+def zero_gps_detail_df(clean_dir: Path) -> pd.DataFrame:
+    """(0,0) 无效 GPS 逐条明细及按 fly_record_id 汇总。"""
+    csv = clean_dir / "fly_telemetry.csv"
+    if not csv.exists():
+        return pd.DataFrame()
+    tel = pd.read_csv(csv, encoding="utf-8-sig")
+    zero = tel[(tel["longitude"] == 0) & (tel["latitude"] == 0)].copy()
+    if zero.empty:
+        return pd.DataFrame({"说明": ["（无 (0,0) 无效 GPS 行）"]})
+
+    prefer = [
+        "fly_record_id",
+        "fly_record_id_valid",
+        "message_time",
+        "longitude",
+        "latitude",
+        "height",
+        "speed",
+        "mission_id",
+    ]
+    cols = [c for c in prefer if c in zero.columns]
+    detail = zero[cols].sort_values(["fly_record_id", "message_time"], na_position="last")
+    detail.insert(0, "序号", range(1, len(detail) + 1))
+
+    summary = (
+        zero.groupby("fly_record_id", as_index=False)
+        .agg(无效GPS条数=("fly_record_id", "size"), 最早时间=("message_time", "min"), 最晚时间=("message_time", "max"))
+        .sort_values("fly_record_id")
+    )
+    summary.insert(0, "类别", "按 fly_record_id 汇总")
+    detail.insert(0, "类别", "逐条明细")
+    summary_cols = ["类别", "fly_record_id", "无效GPS条数", "最早时间", "最晚时间"]
+    detail_cols = ["类别", "序号"] + [c for c in detail.columns if c not in ("类别", "序号")]
+    combined = pd.concat(
+        [
+            summary.reindex(columns=summary_cols),
+            detail.reindex(columns=detail_cols),
+        ],
+        ignore_index=True,
+    )
+    return combined
+
+
 def write_sheet(
     writer: pd.ExcelWriter,
     name: str,
@@ -289,6 +448,7 @@ def build_workbook(
                     "16_质量_字段",
                     "17_质量_行级",
                     "18_质量_GPS轨迹",
+                    "18b_(0,0)GPS明细",
                     "19_质量_行政区",
                 ],
                 "内容": [
@@ -302,7 +462,7 @@ def build_workbook(
                     "clean_data.py 已实现的跨表规则",
                     "仍存在的关联缺口与建议",
                     "本次清洗运行元信息",
-                    "清洗后四表行数与 CSV 文件名",
+                    "清洗后四表行数；遥测 CSV 行数 vs 有效 GPS 口径",
                     "清洗后每字段类型与空值统计",
                     "各表前 50 行样例（全量在 CSV）",
                     "原始文件行数、遥测分片清单",
@@ -311,7 +471,8 @@ def build_workbook(
                     "fly_record_id 等清洗策略文字说明",
                     "字段空值、厂商分布等",
                     "无效 fly_record_id 等行级统计",
-                    "有效 GPS、轨迹数等",
+                    "有效 GPS、轨迹数及 92815→92795 验算",
+                    "20 条 (0,0) 无效 GPS 逐条与按飞行汇总",
                     "行政区内/外点数与占比",
                 ],
             }
@@ -350,13 +511,7 @@ def build_workbook(
         write_sheet(writer, "09_清洗后_元信息", meta_df)
 
         counts = summary.get("row_counts", {})
-        tbl_overview = pd.DataFrame(
-            [
-                {"表": k, "清洗后行数": v, "CSV文件": f"{k}.csv"}
-                for k, v in counts.items()
-            ]
-        )
-        write_sheet(writer, "10_清洗后_表一览", tbl_overview)
+        write_sheet(writer, "10_清洗后_表一览", table_overview_df(counts, quality))
         write_sheet(writer, "11_清洗后_字段Schema", schema_df(summary))
 
         if include_samples:
@@ -381,7 +536,7 @@ def build_workbook(
             src_rows.append(row)
         write_sheet(writer, "12_日志_源数据", pd.DataFrame(src_rows))
 
-        write_sheet(writer, "13_日志_清洗步骤", pipeline_steps_df(clean_log.get("pipeline", {})))
+        write_sheet(writer, "13_日志_清洗步骤", pipeline_steps_df(clean_log.get("pipeline", {}), quality))
         write_sheet(writer, "14_日志_关联完整性", integrity_df(clean_log.get("integrity", {})))
 
         if quality.get("policy"):
@@ -391,9 +546,9 @@ def build_workbook(
 
         gps = quality.get("gps", {})
         admin = quality.get("admin", {})
-        gps_df = pd.DataFrame([{"指标": k, "值": v} for k, v in gps.items()])
+        write_sheet(writer, "18_质量_GPS轨迹", gps_quality_summary_df(gps))
+        write_sheet(writer, "18b_(0,0)GPS明细", zero_gps_detail_df(clean_dir))
         admin_df = pd.DataFrame([{"指标": k, "值": v} for k, v in admin.items()])
-        write_sheet(writer, "18_质量_GPS轨迹", gps_df)
         write_sheet(writer, "19_质量_行政区", admin_df)
 
     _autofit_columns(output_path)
