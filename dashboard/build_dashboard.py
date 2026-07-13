@@ -10,6 +10,7 @@ import re
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -25,6 +26,75 @@ FACTORY_LABELS = {"DJ": "大疆", "YD": "一电", "ZH": "纵横", "MMC": "科比
 FLY_TYPE_LABELS = {1: "任务飞行", 2: "自由飞行"}
 DURATION_MAX_MIN = 60
 TRACK_MAX_POINTS = 100
+SPEED_MAX_MPS = 25  # 约 90 km/h，过滤 GPS 跳点造成的虚高速度
+
+
+def compute_track_telemetry_stats(group: pd.DataFrame) -> dict[str, float | None]:
+    """从遥测点计算高度、速度等轨迹级统计（供地图筛选）。"""
+    stats: dict[str, float | None] = {
+        "max_height_m": None,
+        "avg_height_m": None,
+        "max_speed_kmh": None,
+        "avg_speed_kmh": None,
+    }
+    if "height" in group.columns:
+        heights = pd.to_numeric(group["height"], errors="coerce").dropna()
+        if len(heights):
+            stats["max_height_m"] = round(float(heights.max()), 1)
+            stats["avg_height_m"] = round(float(heights.mean()), 1)
+
+    if len(group) < 2 or "message_time" not in group.columns:
+        return stats
+
+    g = group.sort_values("message_time").copy()
+    g["message_time"] = pd.to_datetime(g["message_time"], errors="coerce")
+    g = g[g["message_time"].notna()]
+    if len(g) < 2:
+        return stats
+
+    dt = g["message_time"].diff().dt.total_seconds()
+    dlon = g["longitude"].astype(float).diff()
+    dlat = g["latitude"].astype(float).diff()
+    dist_m = np.sqrt(dlon**2 + dlat**2) * 111_000
+    speed_mps = dist_m / dt
+    speed_mps = speed_mps.replace([np.inf, -np.inf], np.nan).dropna()
+    speed_mps = speed_mps[(speed_mps > 0) & (speed_mps < SPEED_MAX_MPS)]
+    if len(speed_mps):
+        stats["max_speed_kmh"] = round(float(speed_mps.max()) * 3.6, 1)
+        stats["avg_speed_kmh"] = round(float(speed_mps.mean()) * 3.6, 1)
+    return stats
+
+
+def compute_filter_bounds(tracks: list[dict]) -> dict:
+    """地图页多维筛选的默认范围与可选枚举。"""
+
+    def nums(key: str) -> list[float]:
+        return [float(t[key]) for t in tracks if t.get(key) is not None]
+
+    durations = nums("duration_min")
+    distances_km = [float(t["distance_m"]) / 1000 for t in tracks if t.get("distance_m") is not None]
+    heights = nums("max_height_m")
+    speeds = nums("max_speed_kmh")
+
+    dur_max = min(max(durations) if durations else DURATION_MAX_MIN, 180)
+    dist_max = round(max(distances_km) if distances_km else 25, 1)
+    height_max = round(max(heights) if heights else 250)
+    speed_cap = 90
+    speed_max = round(
+        min(np.percentile(speeds, 95) if len(speeds) > 5 else (max(speeds) if speeds else speed_cap), speed_cap)
+    )
+
+    factories = sorted({t.get("factory") or "未知" for t in tracks if t.get("has_record")})
+    fly_types = sorted({t.get("fly_type") or "未知" for t in tracks})
+
+    return {
+        "duration_min": {"min": 0, "max": round(dur_max, 1), "unit": "分钟", "label": "飞行时长"},
+        "distance_km": {"min": 0, "max": dist_max, "unit": "km", "label": "飞行距离"},
+        "height_m": {"min": 0, "max": height_max, "unit": "m", "label": "飞行高度"},
+        "speed_kmh": {"min": 0, "max": speed_max, "unit": "km/h", "label": "飞行速度"},
+        "factories": factories,
+        "fly_types": fly_types,
+    }
 
 
 def load_tables(data_dir: Path) -> dict[str, pd.DataFrame]:
@@ -200,21 +270,11 @@ def _patch_map_script(script: str) -> str:
     script = script.replace("function initMap()", "function initMapView()")
     script = script.replace("initMap();", "initMapView();")
     script = re.sub(
-        r'\s*\["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"\]\.forEach\(id => \{.*?\}\);\n',
+        r'\n\s*\["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"\]\.forEach\(id => \{[\s\S]*?\n    \}\);\n'
+        r'\s*document\.getElementById\("btn-reset-view"\)\.addEventListener\("click", fitDefaultView\);\n'
+        r'\s*document\.getElementById\("btn-show-all-tracks"\)\.addEventListener\("click", clearTrackSelection\);\n'
+        r'\s*document\.getElementById\("btn-reset-filters"\)\?\.addEventListener\("click", resetTrackFilters\);\n',
         "\n",
-        script,
-        count=1,
-        flags=re.DOTALL,
-    )
-    script = re.sub(
-        r'\s*document\.getElementById\("btn-reset-view"\)\.addEventListener\("click", fitDefaultView\);\n',
-        "",
-        script,
-        count=1,
-    )
-    script = re.sub(
-        r'\s*document\.getElementById\("btn-show-all-tracks"\)\.addEventListener\("click", clearTrackSelection\);\n',
-        "",
         script,
         count=1,
     )
@@ -320,6 +380,69 @@ MAP_EXTRA_CSS = """
       font-size: 0.68rem; cursor: pointer;
     }
     #view-map .filter-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .filter-section { margin-top: 8px; }
+    .filter-section:first-child { margin-top: 0; }
+    .filter-label {
+      font-size: 0.65rem; font-weight: 600; color: var(--muted);
+      margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .filter-count-badge {
+      font-weight: 500; color: var(--accent); font-size: 0.62rem;
+    }
+    .range-values {
+      font-weight: 500; color: var(--heading); font-size: 0.62rem; font-variant-numeric: tabular-nums;
+    }
+    .dual-range {
+      position: relative; height: 28px; margin-top: 4px;
+    }
+    .range-track {
+      position: absolute; left: 7px; right: 7px; top: 50%;
+      transform: translateY(-50%);
+      height: 4px; background: var(--border); border-radius: 999px;
+      pointer-events: none; overflow: hidden;
+    }
+    .range-fill {
+      position: absolute; left: 0; top: 0; height: 100%; width: 100%;
+      background: var(--accent); border-radius: 999px; opacity: 0.5;
+    }
+    .dual-range input[type="range"] {
+      position: absolute; left: 0; right: 0; top: 0;
+      width: 100%; height: 28px; margin: 0;
+      background: transparent; pointer-events: none;
+      -webkit-appearance: none; appearance: none;
+    }
+    .dual-range input[type="range"].range-min { z-index: 3; }
+    .dual-range input[type="range"].range-max { z-index: 4; }
+    .dual-range input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px; background: transparent; border: none;
+    }
+    .dual-range input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; pointer-events: auto;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      margin-top: -5px; cursor: grab;
+    }
+    .dual-range input[type="range"]::-moz-range-track {
+      height: 4px; background: transparent; border: none;
+    }
+    .dual-range input[type="range"]::-moz-range-thumb {
+      pointer-events: auto;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      cursor: grab;
+    }
+    .filter-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .filter-actions button {
+      flex: 1; border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); padding: 5px 8px; border-radius: var(--radius-sm);
+      font-size: 0.65rem; cursor: pointer;
+    }
+    .filter-actions button.primary {
+      background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+    }
+    .track-item.hidden { display: none; }
     .track-list {
       flex: 1;
       min-height: 0;
@@ -409,10 +532,15 @@ ROUTER_SCRIPT = """
       if (mapUiBound) return;
       mapUiBound = true;
       ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
-        document.getElementById(id)?.addEventListener("change", refreshLayers);
+        document.getElementById(id)?.addEventListener("change", () => {
+          updateFilterCountBadge();
+          refreshTrackListVisibility();
+          refreshLayers();
+        });
       });
       document.getElementById("btn-reset-view")?.addEventListener("click", fitDefaultView);
       document.getElementById("btn-show-all-tracks")?.addEventListener("click", clearTrackSelection);
+      document.getElementById("btn-reset-filters")?.addEventListener("click", resetTrackFilters);
     }
 
     function ensureMapData() {
@@ -595,8 +723,21 @@ def build_standalone_html(
 </html>
 """
     output_path.write_text(html, encoding="utf-8")
+    _validate_standalone_script(html)
     size_kb = output_path.stat().st_size // 1024
     print(f"已写入: {output_path} ({size_kb} KB)")
+
+
+def _validate_standalone_script(html: str) -> None:
+    """打包后做简单语法嗅探，避免 map 脚本尾部残留导致总览图表全部失效。"""
+    match = re.search(r"<script>\s*(.*?)\s*</script>\s*</body>", html, flags=re.DOTALL)
+    if not match:
+        return
+    script = match.group(1)
+    if re.search(r"\}\);\s*document\.getElementById\(\"btn-apply-filters\"\)", script):
+        raise RuntimeError("dashboard.html 脚本存在残留 '});'，请检查 _patch_map_script")
+    if "function bootDashboard()" not in script or "function renderCharts()" not in script:
+        raise RuntimeError("dashboard.html 缺少 bootDashboard/renderCharts")
 
 
 def build_payload(tables: dict[str, pd.DataFrame]) -> dict:
@@ -752,6 +893,7 @@ def build_map_payload(tables: dict[str, pd.DataFrame]) -> dict:
             "point_count": int(len(group)),
             "in_district_ratio": round(float(tel_in_district.loc[group.index].mean()), 3),
         }
+        meta.update(compute_track_telemetry_stats(group))
 
         if int(fid) in rec_lookup.index:
             r = rec_lookup.loc[int(fid)]
@@ -823,6 +965,7 @@ def build_map_payload(tables: dict[str, pd.DataFrame]) -> dict:
             "district_name": admin_stats.get("district_name", "越城区"),
             "district_adcode": admin_stats.get("district_adcode", 330602),
             "district_boundary": district_geojson_for_map(),
+            "filter_bounds": compute_filter_bounds(tracks),
         },
         "kpis": {
             "airports": len(airports),

@@ -121,6 +121,68 @@
     }
     .filter-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
+    .filter-section { margin-top: 8px; }
+    .filter-section:first-child { margin-top: 0; }
+    .filter-label {
+      font-size: 0.65rem; font-weight: 600; color: var(--muted);
+      margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .filter-count-badge { font-weight: 500; color: var(--accent); font-size: 0.62rem; }
+    .range-values {
+      font-weight: 500; color: var(--heading); font-size: 0.62rem; font-variant-numeric: tabular-nums;
+    }
+    .dual-range {
+      position: relative; height: 28px; margin-top: 4px;
+    }
+    .range-track {
+      position: absolute; left: 7px; right: 7px; top: 50%;
+      transform: translateY(-50%);
+      height: 4px; background: var(--border); border-radius: 999px;
+      pointer-events: none; overflow: hidden;
+    }
+    .range-fill {
+      position: absolute; left: 0; top: 0; height: 100%; width: 100%;
+      background: var(--accent); border-radius: 999px; opacity: 0.5;
+    }
+    .dual-range input[type="range"] {
+      position: absolute; left: 0; right: 0; top: 0;
+      width: 100%; height: 28px; margin: 0;
+      background: transparent; pointer-events: none;
+      -webkit-appearance: none; appearance: none;
+    }
+    .dual-range input[type="range"].range-min { z-index: 3; }
+    .dual-range input[type="range"].range-max { z-index: 4; }
+    .dual-range input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px; background: transparent; border: none;
+    }
+    .dual-range input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; pointer-events: auto;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      margin-top: -5px; cursor: grab;
+    }
+    .dual-range input[type="range"]::-moz-range-track {
+      height: 4px; background: transparent; border: none;
+    }
+    .dual-range input[type="range"]::-moz-range-thumb {
+      pointer-events: auto;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      cursor: grab;
+    }
+    .filter-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .filter-actions button {
+      flex: 1; border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); padding: 5px 8px; border-radius: var(--radius-sm);
+      font-size: 0.65rem; cursor: pointer;
+    }
+    .filter-actions button.primary {
+      background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+    }
+    .track-item.hidden { display: none; }
+
     .panel-tracks {
       flex: 1;
       min-height: 0;
@@ -248,12 +310,77 @@
         <div class="layer-list">
           <label><input type="checkbox" id="layer-airports" checked /> 机场点位（全部）</label>
           <label><input type="checkbox" id="layer-coverage" checked /> 机场覆盖半径</label>
-          <label><input type="checkbox" id="layer-tracks" checked /> 飞行轨迹（全部有效遥测）</label>
+          <label><input type="checkbox" id="layer-tracks" checked /> 飞行轨迹</label>
           <label><input type="checkbox" id="layer-district" checked /> 显示越城区行政区划</label>
           <label><input type="checkbox" id="layer-region-only" /> 仅显示行政区内轨迹</label>
         </div>
-        <div class="filter-row" id="factory-filters"></div>
         <button type="button" class="filter-btn" id="btn-reset-view" style="margin-top:8px;width:100%;">重置默认视野</button>
+      </div>
+
+      <div class="panel panel-filters">
+        <h3>轨迹筛选 <span class="filter-count-badge" id="filter-count-badge">—</span></h3>
+
+        <div class="filter-section">
+          <div class="filter-label">厂商</div>
+          <div class="filter-row" id="factory-filters"></div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-label">任务类型</div>
+          <div class="filter-row" id="flytype-filters"></div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-label">
+            <span>飞行时长（分钟）</span>
+            <span class="range-values" id="filter-duration-values">—</span>
+          </div>
+          <div class="dual-range">
+            <div class="range-track"><div class="range-fill" id="filter-duration-fill"></div></div>
+            <input type="range" id="filter-duration-min" class="range-min" />
+            <input type="range" id="filter-duration-max" class="range-max" />
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-label">
+            <span>飞行距离（km）</span>
+            <span class="range-values" id="filter-distance-values">—</span>
+          </div>
+          <div class="dual-range">
+            <div class="range-track"><div class="range-fill" id="filter-distance-fill"></div></div>
+            <input type="range" id="filter-distance-min" class="range-min" />
+            <input type="range" id="filter-distance-max" class="range-max" />
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-label">
+            <span>飞行高度（m，轨迹最大）</span>
+            <span class="range-values" id="filter-height-values">—</span>
+          </div>
+          <div class="dual-range">
+            <div class="range-track"><div class="range-fill" id="filter-height-fill"></div></div>
+            <input type="range" id="filter-height-min" class="range-min" />
+            <input type="range" id="filter-height-max" class="range-max" />
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-label">
+            <span>飞行速度（km/h，轨迹最大）</span>
+            <span class="range-values" id="filter-speed-values">—</span>
+          </div>
+          <div class="dual-range">
+            <div class="range-track"><div class="range-fill" id="filter-speed-fill"></div></div>
+            <input type="range" id="filter-speed-min" class="range-min" />
+            <input type="range" id="filter-speed-max" class="range-max" />
+          </div>
+        </div>
+
+        <div class="filter-actions">
+          <button type="button" id="btn-reset-filters" class="primary">重置筛选</button>
+        </div>
       </div>
 
       <div class="panel">
@@ -297,9 +424,22 @@
     let trackLayer = null;
     let districtLayer = null;
     let trackPolylines = new Map();
-    let activeFactory = "all";
     let selectedTrackId = null;
     let routeChart = null;
+    let filterBounds = null;
+    let rangeFiltersBound = false;
+    let trackFilters = {
+      factory: "all",
+      flyType: "all",
+      durationMin: null,
+      durationMax: null,
+      distanceMin: null,
+      distanceMax: null,
+      heightMin: null,
+      heightMax: null,
+      speedMin: null,
+      speedMax: null,
+    };
 
     const BASEMAPS = {
       light: {
@@ -354,23 +494,207 @@
     }
 
     function renderFactoryFilters() {
-      const factories = Object.keys(MAP_DATA.factory_summary.airport);
-      const wrap = document.getElementById("factory-filters");
-      wrap.innerHTML = `<button class="filter-btn active" data-f="all">全部厂商</button>` +
-        factories.map(f => `<button class="filter-btn" data-f="${f}">${f}</button>`).join("");
+      initTrackFilters();
+    }
+
+    function chipFilters(containerId, options, activeKey, datasetKey, onSelect) {
+      const wrap = document.getElementById(containerId);
+      if (!wrap) return;
+      wrap.innerHTML =
+        `<button class="filter-btn active" data-${datasetKey}="all">全部</button>` +
+        options.map(v => `<button class="filter-btn" data-${datasetKey}="${v}">${v}</button>`).join("");
       wrap.querySelectorAll(".filter-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           wrap.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
           btn.classList.add("active");
-          activeFactory = btn.dataset.f;
-          refreshLayers();
+          onSelect(btn.dataset[datasetKey]);
         });
       });
     }
 
+    function formatRangeVal(v, decimals) {
+      return decimals > 0 ? Number(v).toFixed(decimals) : String(Math.round(Number(v)));
+    }
+
+    function updateRangeLabel(labelId, minV, maxV, decimals) {
+      const el = document.getElementById(labelId);
+      if (el) el.textContent = `${formatRangeVal(minV, decimals)} – ${formatRangeVal(maxV, decimals)}`;
+    }
+
+    function updateRangeFill(minId, maxId, fillId) {
+      const minEl = document.getElementById(minId);
+      const maxEl = document.getElementById(maxId);
+      const fill = document.getElementById(fillId);
+      if (!minEl || !maxEl || !fill) return;
+      const lo = Number(minEl.min);
+      const hi = Number(minEl.max);
+      const minV = Number(minEl.value);
+      const maxV = Number(maxEl.value);
+      const span = hi - lo || 1;
+      fill.style.left = ((minV - lo) / span * 100) + "%";
+      fill.style.width = ((maxV - minV) / span * 100) + "%";
+    }
+
+    function configureRangeSlider(minId, maxId, labelId, fillId, bounds, step, decimals) {
+      const minEl = document.getElementById(minId);
+      const maxEl = document.getElementById(maxId);
+      if (!minEl || !maxEl) return;
+      minEl.min = maxEl.min = String(bounds.min);
+      minEl.max = maxEl.max = String(bounds.max);
+      minEl.step = maxEl.step = String(step);
+      minEl.value = String(bounds.min);
+      maxEl.value = String(bounds.max);
+      updateRangeLabel(labelId, bounds.min, bounds.max, decimals);
+      updateRangeFill(minId, maxId, fillId);
+    }
+
+    function readRangeSlider(minId, maxId) {
+      const minEl = document.getElementById(minId);
+      const maxEl = document.getElementById(maxId);
+      return { min: Number(minEl.value), max: Number(maxEl.value) };
+    }
+
+    function bindRangeFilterInputs() {
+      if (rangeFiltersBound) return;
+      rangeFiltersBound = true;
+      const specs = [
+        ["filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", 0],
+        ["filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", 1],
+        ["filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", 0],
+        ["filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", 0],
+      ];
+      specs.forEach(([minId, maxId, labelId, fillId, decimals]) => {
+        const minEl = document.getElementById(minId);
+        const maxEl = document.getElementById(maxId);
+        if (!minEl || !maxEl) return;
+        const onSlide = (changed) => {
+          let minV = Number(minEl.value);
+          let maxV = Number(maxEl.value);
+          if (minV > maxV) {
+            if (changed === "min") maxEl.value = String(minV);
+            else minEl.value = String(maxV);
+            minV = Number(minEl.value);
+            maxV = Number(maxEl.value);
+          }
+          updateRangeLabel(labelId, minV, maxV, decimals);
+          updateRangeFill(minId, maxId, fillId);
+          applyTrackFilters();
+        };
+        minEl.addEventListener("input", () => onSlide("min"));
+        maxEl.addEventListener("input", () => onSlide("max"));
+      });
+    }
+
+    function initTrackFilters() {
+      filterBounds = MAP_DATA.meta.filter_bounds;
+      if (!filterBounds) return;
+
+      chipFilters("factory-filters", filterBounds.factories || [], trackFilters.factory, "f", v => {
+        trackFilters.factory = v;
+        applyTrackFilters();
+      });
+      chipFilters("flytype-filters", filterBounds.fly_types || [], trackFilters.flyType, "t", v => {
+        trackFilters.flyType = v;
+        applyTrackFilters();
+      });
+
+      const b = filterBounds;
+      configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 1, 0);
+      configureRangeSlider("filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", b.distance_km, 0.1, 1);
+      configureRangeSlider("filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", b.height_m, 1, 0);
+      configureRangeSlider("filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", b.speed_kmh, 1, 0);
+      bindRangeFilterInputs();
+
+      syncFilterStateFromInputs();
+      updateFilterCountBadge();
+    }
+
+    function syncFilterStateFromInputs() {
+      const dur = readRangeSlider("filter-duration-min", "filter-duration-max");
+      const dist = readRangeSlider("filter-distance-min", "filter-distance-max");
+      const h = readRangeSlider("filter-height-min", "filter-height-max");
+      const spd = readRangeSlider("filter-speed-min", "filter-speed-max");
+      trackFilters.durationMin = dur.min;
+      trackFilters.durationMax = dur.max;
+      trackFilters.distanceMin = dist.min;
+      trackFilters.distanceMax = dist.max;
+      trackFilters.heightMin = h.min;
+      trackFilters.heightMax = h.max;
+      trackFilters.speedMin = spd.min;
+      trackFilters.speedMax = spd.max;
+    }
+
+    function resetTrackFilters() {
+      if (!filterBounds) return;
+      trackFilters.factory = "all";
+      trackFilters.flyType = "all";
+      document.querySelectorAll("#factory-filters .filter-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.f === "all");
+      });
+      document.querySelectorAll("#flytype-filters .filter-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.t === "all");
+      });
+
+      const b = filterBounds;
+      configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 1, 0);
+      configureRangeSlider("filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", b.distance_km, 0.1, 1);
+      configureRangeSlider("filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", b.height_m, 1, 0);
+      configureRangeSlider("filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", b.speed_kmh, 1, 0);
+      syncFilterStateFromInputs();
+      applyTrackFilters();
+    }
+
+    function applyTrackFilters() {
+      syncFilterStateFromInputs();
+      if (selectedTrackId !== null) clearTrackSelection();
+      updateFilterCountBadge();
+      refreshTrackListVisibility();
+      refreshLayers();
+    }
+
+    function inNumericRange(value, min, max) {
+      if (value == null || Number.isNaN(value)) return min == null && max == null;
+      if (min != null && value < min) return false;
+      if (max != null && value > max) return false;
+      return true;
+    }
+
+    function matchTrackFilters(t) {
+      if (trackFilters.factory !== "all" && t.factory !== trackFilters.factory) return false;
+      if (trackFilters.flyType !== "all" && t.fly_type !== trackFilters.flyType) return false;
+      if (!inNumericRange(t.duration_min, trackFilters.durationMin, trackFilters.durationMax)) return false;
+      const distKm = t.distance_m != null ? t.distance_m / 1000 : null;
+      if (!inNumericRange(distKm, trackFilters.distanceMin, trackFilters.distanceMax)) return false;
+      if (!inNumericRange(t.max_height_m, trackFilters.heightMin, trackFilters.heightMax)) return false;
+      if (!inNumericRange(t.max_speed_kmh, trackFilters.speedMin, trackFilters.speedMax)) return false;
+      return true;
+    }
+
+    function filteredTracks() {
+      return MAP_DATA.tracks.filter(t => matchTrackFilters(t) && matchRegion(t));
+    }
+
+    function updateFilterCountBadge() {
+      const badge = document.getElementById("filter-count-badge");
+      if (!badge || !MAP_DATA) return;
+      const n = filteredTracks().length;
+      const total = MAP_DATA.tracks.length;
+      badge.textContent = `${n} / ${total} 条`;
+    }
+
+    function refreshTrackListVisibility() {
+      document.querySelectorAll(".track-item").forEach(el => {
+        const id = Number(el.dataset.id);
+        const t = MAP_DATA.tracks.find(x => x.id === id);
+        const visible = selectedTrackId === id || (selectedTrackId === null && t && matchTrackFilters(t) && matchRegion(t));
+        el.classList.toggle("hidden", !visible);
+      });
+      updateTrackListMeta();
+    }
+
     function shouldShowTrack(t) {
       if (selectedTrackId !== null) return t.id === selectedTrackId;
-      return matchFactory(t) && matchRegion(t);
+      return matchTrackFilters(t) && matchRegion(t);
     }
 
     function updateTrackListMeta() {
@@ -381,7 +705,8 @@
         meta.textContent = `当前 #${selectedTrackId} · 地图仅显示该轨迹`;
         btn?.classList.add("visible");
       } else {
-        meta.textContent = `共 ${MAP_DATA.tracks.length} 条 · 按遥测点数排序 · 点击仅显示该轨迹`;
+        const n = filteredTracks().length;
+        meta.textContent = `筛选 ${n} / ${MAP_DATA.tracks.length} 条 · 按遥测点数排序 · 点击仅显示该轨迹`;
         btn?.classList.remove("visible");
       }
     }
@@ -392,10 +717,19 @@
       updateTrackListMeta();
       list.innerHTML = tracks.map(t => {
         const title = `#${t.id} · ${t.point_count} 点${t.task_name ? " · " + t.task_name : ""}`;
-        const meta = `${t.factory || "未知"} · ${t.start_time || "—"}`;
-        return `<div class="track-item" data-id="${t.id}">
+        const parts = [
+          t.factory || "未知",
+          t.fly_type || "—",
+          t.duration_min != null ? `${t.duration_min} 分钟` : null,
+          t.distance_m != null ? `${(t.distance_m / 1000).toFixed(1)} km` : null,
+          t.max_height_m != null ? `${t.max_height_m} m` : null,
+          t.max_speed_kmh != null ? `${t.max_speed_kmh} km/h` : null,
+        ].filter(Boolean);
+        const meta = parts.join(" · ");
+        const hidden = !matchTrackFilters(t) || !matchRegion(t);
+        return `<div class="track-item${hidden ? " hidden" : ""}" data-id="${t.id}">
           <span class="track-item-title">${title}</span>
-          <span class="track-item-meta">${meta}</span>
+          <span class="track-item-meta">${meta || t.start_time || "—"}</span>
         </div>`;
       }).join("");
       list.querySelectorAll(".track-item").forEach(el => {
@@ -423,14 +757,16 @@
         ${t.airport_name ? "起飞机场：" + t.airport_name + "<br>" : ""}
         遥测点：${t.point_count}（行政内 ${Math.round((t.in_district_ratio ?? 0) * 100)}%）<br>
         ${t.duration_min != null ? "时长：" + t.duration_min + " 分钟<br>" : ""}
-        ${t.distance_m != null ? "距离：" + t.distance_m + " m<br>" : ""}
+        ${t.distance_m != null ? "距离：" + (t.distance_m / 1000).toFixed(2) + " km<br>" : ""}
+        ${t.max_height_m != null ? "最大高度：" + t.max_height_m + " m<br>" : ""}
+        ${t.max_speed_kmh != null ? "最大速度：" + t.max_speed_kmh + " km/h<br>" : ""}
         ${t.start_time ? "起飞：" + t.start_time + "<br>" : ""}
         ${!t.has_record ? "<span style='color:#E67E22'>⚠ 无飞行记录关联</span>" : ""}`;
     }
 
     function matchFactory(item) {
-      if (activeFactory === "all") return true;
-      return item.factory === activeFactory;
+      if (trackFilters.factory === "all") return true;
+      return item.factory === trackFilters.factory;
     }
 
     function matchRegion(t) {
@@ -547,8 +883,8 @@
     function clearTrackSelection() {
       selectedTrackId = null;
       refreshLayers();
+      refreshTrackListVisibility();
       document.querySelectorAll(".track-item").forEach(el => el.classList.remove("active"));
-      updateTrackListMeta();
     }
 
     function focusTrack(id) {
@@ -609,10 +945,15 @@
     });
 
     ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
-      document.getElementById(id).addEventListener("change", refreshLayers);
+      document.getElementById(id).addEventListener("change", () => {
+        updateFilterCountBadge();
+        refreshTrackListVisibility();
+        refreshLayers();
+      });
     });
     document.getElementById("btn-reset-view").addEventListener("click", fitDefaultView);
     document.getElementById("btn-show-all-tracks").addEventListener("click", clearTrackSelection);
+    document.getElementById("btn-reset-filters")?.addEventListener("click", resetTrackFilters);
 
     const savedTheme = localStorage.getItem("dashboard-theme");
     if (savedTheme) setTheme(savedTheme);
