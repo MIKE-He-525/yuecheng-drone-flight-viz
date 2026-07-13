@@ -77,12 +77,10 @@ def compute_filter_bounds(tracks: list[dict]) -> dict:
     speeds = nums("max_speed_kmh")
 
     dur_max = min(max(durations) if durations else DURATION_MAX_MIN, 180)
-    dist_max = round(max(distances_km) if distances_km else 25, 1)
-    height_max = round(max(heights) if heights else 250)
+    dist_max = round((max(distances_km) if distances_km else 25) + 0.05, 1)
+    height_max = int(np.ceil(max(heights) if heights else 250))
     speed_cap = 90
-    speed_max = round(
-        min(np.percentile(speeds, 95) if len(speeds) > 5 else (max(speeds) if speeds else speed_cap), speed_cap)
-    )
+    speed_max = round(min(max(speeds) if speeds else speed_cap, speed_cap))
 
     factories = sorted({t.get("factory") or "未知" for t in tracks if t.get("has_record")})
     fly_types = sorted({t.get("fly_type") or "未知" for t in tracks})
@@ -90,8 +88,8 @@ def compute_filter_bounds(tracks: list[dict]) -> dict:
     return {
         "duration_min": {"min": 0, "max": round(dur_max, 1), "unit": "分钟", "label": "飞行时长"},
         "distance_km": {"min": 0, "max": dist_max, "unit": "km", "label": "飞行距离"},
-        "height_m": {"min": 0, "max": height_max, "unit": "m", "label": "飞行高度"},
-        "speed_kmh": {"min": 0, "max": speed_max, "unit": "km/h", "label": "飞行速度"},
+        "height_m": {"min": 0, "max": height_max, "unit": "m", "label": "飞行轨迹最大高度"},
+        "speed_kmh": {"min": 0, "max": speed_max, "unit": "km/h", "label": "飞行最大速度"},
         "factories": factories,
         "fly_types": fly_types,
     }
@@ -272,8 +270,11 @@ def _patch_map_script(script: str) -> str:
     script = re.sub(
         r'\n\s*\["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"\]\.forEach\(id => \{[\s\S]*?\n    \}\);\n'
         r'\s*document\.getElementById\("btn-reset-view"\)\.addEventListener\("click", fitDefaultView\);\n'
-        r'\s*document\.getElementById\("btn-show-all-tracks"\)\.addEventListener\("click", clearTrackSelection\);\n'
-        r'\s*document\.getElementById\("btn-reset-filters"\)\?\.addEventListener\("click", resetTrackFilters\);\n',
+        r'\s*document\.getElementById\("btn-solo-track"\)\?\.addEventListener\("click", enterSoloTrackMode\);\n'
+        r'\s*document\.getElementById\("btn-clear-selection"\)\?\.addEventListener\("click", clearTrackSelection\);\n'
+        r'\s*document\.getElementById\("btn-reset-filters"\)\?\.addEventListener\("click", resetTrackFilters\);\n'
+        r'\s*document\.getElementById\("track-search"\)\?\.addEventListener\("input", e => \{[\s\S]*?\n    \}\);\n'
+        r'\s*document\.getElementById\("track-sort"\)\?\.addEventListener\("change", e => \{[\s\S]*?\n    \}\);\n',
         "\n",
         script,
         count=1,
@@ -286,7 +287,7 @@ MAP_EXTRA_CSS = """
     .view.active { display: block; }
     .layout {
       display: grid;
-      grid-template-columns: 260px 1fr 260px;
+      grid-template-columns: 220px 1fr 300px;
       min-height: 100vh;
     }
     @media (max-width: 1100px) {
@@ -306,12 +307,60 @@ MAP_EXTRA_CSS = """
     .track-rail {
       background: var(--surface);
       border-left: 1px solid var(--border);
-      padding: 12px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 8px;
       height: 100vh;
       overflow: hidden;
+    }
+    .track-rail-filters {
+      flex-shrink: 0;
+      max-height: 46vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-gutter: stable;
+    }
+    .track-list-section {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .filter-status {
+      font-size: 0.62rem;
+      color: var(--muted);
+      line-height: 1.4;
+      padding: 6px 8px;
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .filter-status-chips {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+    }
+    .filter-chip {
+      font-size: 0.6rem; padding: 2px 6px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent);
+      border: 1px solid transparent;
+    }
+    .list-toolbar {
+      display: flex; gap: 6px; align-items: center;
+    }
+    .list-toolbar input, .list-toolbar select {
+      flex: 1; min-width: 0;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); border-radius: var(--radius-sm);
+      padding: 4px 6px; font-size: 0.65rem; font-family: inherit;
+    }
+    .list-toolbar select { flex: 0 0 auto; max-width: 88px; }
+    .track-actions { display: flex; gap: 4px; margin-top: 4px; }
+    .track-actions .filter-btn { flex: 1; text-align: center; }
+    #btn-solo-track, #btn-clear-selection { display: none; }
+    #btn-solo-track.visible, #btn-clear-selection.visible { display: block; }
+    .panel-filters h3 {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
     }
     @media (max-width: 1100px) {
       .track-rail {
@@ -332,14 +381,6 @@ MAP_EXTRA_CSS = """
       color: var(--muted);
       margin-top: 2px;
     }
-    #btn-show-all-tracks {
-      margin-top: 6px;
-      width: 100%;
-      display: none;
-      border-radius: var(--radius-sm);
-      padding: 5px 8px;
-    }
-    #btn-show-all-tracks.visible { display: block; }
     .back-link {
       display: inline-flex; align-items: center; gap: 4px;
       font-size: 0.75rem; color: var(--accent); text-decoration: none; font-weight: 500;
@@ -534,13 +575,23 @@ ROUTER_SCRIPT = """
       ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
         document.getElementById(id)?.addEventListener("change", () => {
           updateFilterCountBadge();
-          refreshTrackListVisibility();
+          updateFilterStatus();
+          renderTrackList();
           refreshLayers();
         });
       });
       document.getElementById("btn-reset-view")?.addEventListener("click", fitDefaultView);
-      document.getElementById("btn-show-all-tracks")?.addEventListener("click", clearTrackSelection);
+      document.getElementById("btn-solo-track")?.addEventListener("click", enterSoloTrackMode);
+      document.getElementById("btn-clear-selection")?.addEventListener("click", clearTrackSelection);
       document.getElementById("btn-reset-filters")?.addEventListener("click", resetTrackFilters);
+      document.getElementById("track-search")?.addEventListener("input", e => {
+        trackSearchQuery = e.target.value;
+        renderTrackList();
+      });
+      document.getElementById("track-sort")?.addEventListener("change", e => {
+        trackSortKey = e.target.value;
+        renderTrackList();
+      });
     }
 
     function ensureMapData() {
@@ -568,9 +619,6 @@ ROUTER_SCRIPT = """
         if (typeof Chart !== "undefined") renderCharts();
       }
       if (typeof applyBasemap === "function" && map) applyBasemap(name);
-      if (typeof MAP_DATA !== "undefined" && MAP_DATA && typeof renderRouteChart === "function") {
-        renderRouteChart();
-      }
     }
 
     function showView(view) {
@@ -590,8 +638,8 @@ ROUTER_SCRIPT = """
           document.getElementById("map-meta-range").style.color = "";
           renderMapKPIs();
           renderFactoryFilters();
+          updateFilterStatus();
           renderTrackList();
-          renderRouteChart();
           initMapView();
           mapViewReady = true;
         } else if (map) {
@@ -653,7 +701,7 @@ def build_standalone_html(
         flags=re.DOTALL,
     )
     map_body_match = re.search(
-        r'(<div class="layout">.*?</aside>\s*</div>)',
+        r'(<div class="layout">[\s\S]*<aside class="track-rail">[\s\S]*?</aside>\s*</div>)',
         map_html,
         flags=re.DOTALL,
     )

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-07-10 14:17:27 +0800",
+    "generated_at": "2026-07-13 13:38:56 +0800",
     "script": "clean_data.py",
     "input_dir": "D:\\coding\\DataPreprocessing\\越城无人机数据+字段描述",
     "output_dir": "D:\\coding\\DataPreprocessing\\clean_data",
@@ -167,6 +167,20 @@
           "rows_before": 92815,
           "rows_after": 92815,
           "removed": 0
+        },
+        {
+          "step": "audit_zero_zero_gps",
+          "rows_before": 92815,
+          "rows_after": 92815,
+          "removed": 0,
+          "reason": "经纬度 (0,0) 视为无效 GPS，不删除行；无效 20 条，缺失经纬度 0 条，有效 GPS 92795 条",
+          "columns": [
+            "longitude",
+            "latitude"
+          ],
+          "zero_zero_points": 20,
+          "rows_missing_gps": 0,
+          "valid_gps_points": 92795
         }
       ]
     },

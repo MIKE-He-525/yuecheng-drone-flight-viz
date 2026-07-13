@@ -19,7 +19,7 @@
     }
     .layout {
       display: grid;
-      grid-template-columns: 260px 1fr 260px;
+      grid-template-columns: 220px 1fr 300px;
       min-height: 100vh;
     }
     @media (max-width: 1100px) {
@@ -41,13 +41,57 @@
     .track-rail {
       background: var(--surface);
       border-left: 1px solid var(--border);
-      padding: 12px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 8px;
       height: 100vh;
       overflow: hidden;
     }
+    .track-rail-filters {
+      flex-shrink: 0;
+      max-height: 46vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-gutter: stable;
+    }
+    .track-list-section {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .filter-status {
+      font-size: 0.62rem;
+      color: var(--muted);
+      line-height: 1.4;
+      padding: 6px 8px;
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .filter-status-chips {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+    }
+    .filter-chip {
+      font-size: 0.6rem; padding: 2px 6px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent);
+      border: 1px solid transparent;
+    }
+    .list-toolbar {
+      display: flex; gap: 6px; align-items: center;
+    }
+    .list-toolbar input, .list-toolbar select {
+      flex: 1; min-width: 0;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); border-radius: var(--radius-sm);
+      padding: 4px 6px; font-size: 0.65rem; font-family: inherit;
+    }
+    .list-toolbar select { flex: 0 0 auto; max-width: 88px; }
+    .track-item.dimmed { opacity: 0.45; }
+    .track-actions { display: flex; gap: 4px; margin-top: 4px; }
+    .track-actions .filter-btn { flex: 1; text-align: center; }
     @media (max-width: 1100px) {
       .track-rail {
         height: auto;
@@ -67,15 +111,12 @@
       color: var(--muted);
       margin-top: 2px;
     }
-    #btn-show-all-tracks {
-      margin-top: 6px;
-      width: 100%;
-      display: none;
-      border-radius: var(--radius-sm);
-      padding: 5px 8px;
-    }
-    #btn-show-all-tracks.visible { display: block; }
+    #btn-solo-track, #btn-clear-selection { display: none; }
+    #btn-solo-track.visible, #btn-clear-selection.visible { display: block; }
 
+    .panel-filters h3 {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    }
     .back-link {
       display: inline-flex; align-items: center; gap: 4px;
       font-size: 0.75rem; color: var(--accent); text-decoration: none; font-weight: 500;
@@ -316,78 +357,6 @@
         </div>
         <button type="button" class="filter-btn" id="btn-reset-view" style="margin-top:8px;width:100%;">重置默认视野</button>
       </div>
-
-      <div class="panel panel-filters">
-        <h3>轨迹筛选 <span class="filter-count-badge" id="filter-count-badge">—</span></h3>
-
-        <div class="filter-section">
-          <div class="filter-label">厂商</div>
-          <div class="filter-row" id="factory-filters"></div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-label">任务类型</div>
-          <div class="filter-row" id="flytype-filters"></div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-label">
-            <span>飞行时长（分钟）</span>
-            <span class="range-values" id="filter-duration-values">—</span>
-          </div>
-          <div class="dual-range">
-            <div class="range-track"><div class="range-fill" id="filter-duration-fill"></div></div>
-            <input type="range" id="filter-duration-min" class="range-min" />
-            <input type="range" id="filter-duration-max" class="range-max" />
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-label">
-            <span>飞行距离（km）</span>
-            <span class="range-values" id="filter-distance-values">—</span>
-          </div>
-          <div class="dual-range">
-            <div class="range-track"><div class="range-fill" id="filter-distance-fill"></div></div>
-            <input type="range" id="filter-distance-min" class="range-min" />
-            <input type="range" id="filter-distance-max" class="range-max" />
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-label">
-            <span>飞行高度（m，轨迹最大）</span>
-            <span class="range-values" id="filter-height-values">—</span>
-          </div>
-          <div class="dual-range">
-            <div class="range-track"><div class="range-fill" id="filter-height-fill"></div></div>
-            <input type="range" id="filter-height-min" class="range-min" />
-            <input type="range" id="filter-height-max" class="range-max" />
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-label">
-            <span>飞行速度（km/h，轨迹最大）</span>
-            <span class="range-values" id="filter-speed-values">—</span>
-          </div>
-          <div class="dual-range">
-            <div class="range-track"><div class="range-fill" id="filter-speed-fill"></div></div>
-            <input type="range" id="filter-speed-min" class="range-min" />
-            <input type="range" id="filter-speed-max" class="range-max" />
-          </div>
-        </div>
-
-        <div class="filter-actions">
-          <button type="button" id="btn-reset-filters" class="primary">重置筛选</button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3>预定义航线距离</h3>
-        <div class="chart-mini"><canvas id="chart-route-dist"></canvas></div>
-        <p class="sub" id="route-stats" style="margin-top:6px"></p>
-      </div>
     </aside>
 
     <main class="map-wrap">
@@ -403,12 +372,98 @@
     </main>
 
     <aside class="track-rail">
-      <div class="track-rail-header">
-        <h2>飞行轨迹列表</h2>
-        <p id="track-list-meta">按遥测点数排序 · 点击定位</p>
-        <button type="button" class="filter-btn" id="btn-show-all-tracks">显示全部轨迹</button>
+      <div class="track-rail-filters">
+        <div class="panel panel-filters">
+          <h3>轨迹筛选 <span class="filter-count-badge" id="filter-count-badge">—</span></h3>
+
+          <div class="filter-section">
+            <div class="filter-label">厂商</div>
+            <div class="filter-row" id="factory-filters"></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">任务类型</div>
+            <div class="filter-row" id="flytype-filters"></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>飞行时长（分钟）</span>
+              <span class="range-values" id="filter-duration-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-duration-fill"></div></div>
+              <input type="range" id="filter-duration-min" class="range-min" />
+              <input type="range" id="filter-duration-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>飞行距离（km）</span>
+              <span class="range-values" id="filter-distance-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-distance-fill"></div></div>
+              <input type="range" id="filter-distance-min" class="range-min" />
+              <input type="range" id="filter-distance-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>飞行轨迹最大高度（m）</span>
+              <span class="range-values" id="filter-height-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-height-fill"></div></div>
+              <input type="range" id="filter-height-min" class="range-min" />
+              <input type="range" id="filter-height-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>飞行最大速度（km/h）</span>
+              <span class="range-values" id="filter-speed-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-speed-fill"></div></div>
+              <input type="range" id="filter-speed-min" class="range-min" />
+              <input type="range" id="filter-speed-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-actions">
+            <button type="button" id="btn-reset-filters" class="primary">重置筛选</button>
+          </div>
+        </div>
       </div>
-      <div class="track-list" id="track-list"></div>
+
+      <div class="filter-status" id="filter-status">
+        <span id="filter-status-text">调整筛选条件以缩小结果集</span>
+        <div class="filter-status-chips" id="filter-status-chips"></div>
+      </div>
+
+      <div class="track-list-section">
+        <div class="track-rail-header">
+          <h2>筛选结果 <span class="filter-count-badge" id="list-count-badge">—</span></h2>
+          <p id="track-list-meta">点击定位 · 高亮显示</p>
+          <div class="track-actions">
+            <button type="button" class="filter-btn" id="btn-solo-track">仅看此条</button>
+            <button type="button" class="filter-btn" id="btn-clear-selection">取消选中</button>
+          </div>
+        </div>
+        <div class="list-toolbar">
+          <input type="search" id="track-search" placeholder="搜索 ID / 任务名" />
+          <select id="track-sort" title="排序">
+            <option value="points">点数</option>
+            <option value="duration">时长</option>
+            <option value="distance">距离</option>
+          </select>
+        </div>
+        <div class="track-list" id="track-list"></div>
+      </div>
     </aside>
   </div>
 
@@ -425,7 +480,9 @@
     let districtLayer = null;
     let trackPolylines = new Map();
     let selectedTrackId = null;
-    let routeChart = null;
+    let soloTrackMode = false;
+    let trackSearchQuery = "";
+    let trackSortKey = "points";
     let filterBounds = null;
     let rangeFiltersBound = false;
     let trackFilters = {
@@ -484,9 +541,6 @@
         <div><div class="lbl">飞行记录</div><div class="val">${k.flights_total.toLocaleString()}</div></div>
         <div><div class="lbl">预定义航线</div><div class="val">${k.routes}</div></div>
       `;
-      const rs = MAP_DATA.routes.distance_km;
-      document.getElementById("route-stats").textContent =
-        `距离 ${rs.min}–${rs.max} km，中位 ${rs.median} km，均值 ${rs.mean} km`;
     }
 
     function renderFactoryFilters() {
@@ -595,7 +649,7 @@
       });
 
       const b = filterBounds;
-      configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 1, 0);
+      configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 0.1, 1);
       configureRangeSlider("filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", b.distance_km, 0.1, 1);
       configureRangeSlider("filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", b.height_m, 1, 0);
       configureRangeSlider("filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", b.speed_kmh, 1, 0);
@@ -632,7 +686,7 @@
       });
 
       const b = filterBounds;
-      configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 1, 0);
+      configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 0.1, 1);
       configureRangeSlider("filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", b.distance_km, 0.1, 1);
       configureRangeSlider("filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", b.height_m, 1, 0);
       configureRangeSlider("filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", b.speed_kmh, 1, 0);
@@ -642,14 +696,131 @@
 
     function applyTrackFilters() {
       syncFilterStateFromInputs();
-      if (selectedTrackId !== null) clearTrackSelection();
+      if (soloTrackMode) soloTrackMode = false;
       updateFilterCountBadge();
-      refreshTrackListVisibility();
+      updateFilterStatus();
+      renderTrackList();
       refreshLayers();
     }
 
+    function updateFilterStatus() {
+      const chipsEl = document.getElementById("filter-status-chips");
+      const textEl = document.getElementById("filter-status-text");
+      if (!chipsEl || !textEl || !filterBounds) return;
+      const chips = [];
+      if (trackFilters.factory !== "all") chips.push(trackFilters.factory);
+      if (trackFilters.flyType !== "all") chips.push(trackFilters.flyType);
+      const b = filterBounds;
+      if (trackFilters.durationMin > b.duration_min.min || trackFilters.durationMax < b.duration_min.max) {
+        chips.push(`时长 ${formatRangeVal(trackFilters.durationMin, 0)}–${formatRangeVal(trackFilters.durationMax, 0)} 分`);
+      }
+      if (trackFilters.distanceMin > b.distance_km.min || trackFilters.distanceMax < b.distance_km.max) {
+        chips.push(`距离 ${formatRangeVal(trackFilters.distanceMin, 1)}–${formatRangeVal(trackFilters.distanceMax, 1)} km`);
+      }
+      if (trackFilters.heightMin > b.height_m.min || trackFilters.heightMax < b.height_m.max) {
+        chips.push(`高度 ${formatRangeVal(trackFilters.heightMin, 0)}–${formatRangeVal(trackFilters.heightMax, 0)} m`);
+      }
+      if (trackFilters.speedMin > b.speed_kmh.min || trackFilters.speedMax < b.speed_kmh.max) {
+        chips.push(`速度 ${formatRangeVal(trackFilters.speedMin, 0)}–${formatRangeVal(trackFilters.speedMax, 0)} km/h`);
+      }
+      if (document.getElementById("layer-region-only")?.checked) chips.push("仅行政区内");
+      const n = filteredTracks().length;
+      textEl.textContent = chips.length ? `当前条件 · 共 ${n} 条轨迹` : `未限制维度 · 共 ${n} 条轨迹`;
+      chipsEl.innerHTML = chips.map(c => `<span class="filter-chip">${c}</span>`).join("");
+    }
+
+    function updateFilterCountBadge() {
+      const badge = document.getElementById("filter-count-badge");
+      const listBadge = document.getElementById("list-count-badge");
+      if (!MAP_DATA) return;
+      const n = filteredTracks().length;
+      const total = MAP_DATA.tracks.length;
+      const label = `${n} / ${total}`;
+      if (badge) badge.textContent = label;
+      if (listBadge) listBadge.textContent = label;
+    }
+
+    function sortTracks(tracks) {
+      const arr = [...tracks];
+      if (trackSortKey === "duration") {
+        arr.sort((a, b) => (b.duration_min || 0) - (a.duration_min || 0));
+      } else if (trackSortKey === "distance") {
+        arr.sort((a, b) => (b.distance_m || 0) - (a.distance_m || 0));
+      } else {
+        arr.sort((a, b) => b.point_count - a.point_count);
+      }
+      return arr;
+    }
+
+    function listTracksForDisplay() {
+      let tracks = sortTracks(filteredTracks());
+      if (trackSearchQuery.trim()) {
+        const q = trackSearchQuery.trim().toLowerCase();
+        tracks = tracks.filter(t =>
+          String(t.id).includes(q) || (t.task_name || "").toLowerCase().includes(q),
+        );
+      }
+      return tracks;
+    }
+
+    function shouldShowTrack(t) {
+      if (!matchTrackFilters(t) || !matchRegion(t)) return false;
+      if (soloTrackMode && selectedTrackId !== null) return t.id === selectedTrackId;
+      return true;
+    }
+
+    function updateTrackListMeta() {
+      const meta = document.getElementById("track-list-meta");
+      const soloBtn = document.getElementById("btn-solo-track");
+      const clearBtn = document.getElementById("btn-clear-selection");
+      if (!meta) return;
+      if (selectedTrackId !== null) {
+        meta.textContent = soloTrackMode
+          ? `仅显示 #${selectedTrackId}`
+          : `已选中 #${selectedTrackId} · 地图高亮 · 其余半透明`;
+        soloBtn?.classList.toggle("visible", !soloTrackMode);
+        clearBtn?.classList.add("visible");
+      } else {
+        const shown = listTracksForDisplay().length;
+        const total = filteredTracks().length;
+        meta.textContent = shown === total
+          ? `共 ${total} 条 · 点击列表项定位并高亮`
+          : `显示 ${shown} / ${total} 条 · 点击定位并高亮`;
+        soloBtn?.classList.remove("visible");
+        clearBtn?.classList.remove("visible");
+      }
+    }
+
+    function renderTrackList() {
+      const list = document.getElementById("track-list");
+      const tracks = listTracksForDisplay();
+      updateTrackListMeta();
+      if (!tracks.length) {
+        list.innerHTML = `<div class="track-item" style="cursor:default;color:var(--muted)">无匹配轨迹，请放宽筛选或搜索条件</div>`;
+        return;
+      }
+      list.innerHTML = tracks.map(t => {
+        const title = `#${t.id} · ${t.point_count} 点${t.task_name ? " · " + t.task_name : ""}`;
+        const parts = [
+          t.factory || "未知",
+          t.fly_type || "—",
+          t.duration_min != null ? `${t.duration_min} 分钟` : null,
+          t.distance_m != null ? `${(t.distance_m / 1000).toFixed(1)} km` : null,
+        ].filter(Boolean);
+        const meta = parts.join(" · ");
+        const active = selectedTrackId === t.id ? " active" : "";
+        return `<div class="track-item${active}" data-id="${t.id}">
+          <span class="track-item-title">${title}</span>
+          <span class="track-item-meta">${meta || t.start_time || "—"}</span>
+        </div>`;
+      }).join("");
+      list.querySelectorAll(".track-item[data-id]").forEach(el => {
+        el.addEventListener("click", () => focusTrack(Number(el.dataset.id)));
+      });
+    }
+
     function inNumericRange(value, min, max) {
-      if (value == null || Number.isNaN(value)) return min == null && max == null;
+      if (value == null || Number.isNaN(value)) return true;
       if (min != null && value < min) return false;
       if (max != null && value > max) return false;
       return true;
@@ -668,69 +839,6 @@
 
     function filteredTracks() {
       return MAP_DATA.tracks.filter(t => matchTrackFilters(t) && matchRegion(t));
-    }
-
-    function updateFilterCountBadge() {
-      const badge = document.getElementById("filter-count-badge");
-      if (!badge || !MAP_DATA) return;
-      const n = filteredTracks().length;
-      const total = MAP_DATA.tracks.length;
-      badge.textContent = `${n} / ${total} 条`;
-    }
-
-    function refreshTrackListVisibility() {
-      document.querySelectorAll(".track-item").forEach(el => {
-        const id = Number(el.dataset.id);
-        const t = MAP_DATA.tracks.find(x => x.id === id);
-        const visible = selectedTrackId === id || (selectedTrackId === null && t && matchTrackFilters(t) && matchRegion(t));
-        el.classList.toggle("hidden", !visible);
-      });
-      updateTrackListMeta();
-    }
-
-    function shouldShowTrack(t) {
-      if (selectedTrackId !== null) return t.id === selectedTrackId;
-      return matchTrackFilters(t) && matchRegion(t);
-    }
-
-    function updateTrackListMeta() {
-      const meta = document.getElementById("track-list-meta");
-      const btn = document.getElementById("btn-show-all-tracks");
-      if (!meta) return;
-      if (selectedTrackId !== null) {
-        meta.textContent = `当前 #${selectedTrackId} · 地图仅显示该轨迹`;
-        btn?.classList.add("visible");
-      } else {
-        const n = filteredTracks().length;
-        meta.textContent = `筛选 ${n} / ${MAP_DATA.tracks.length} 条 · 按遥测点数排序 · 点击仅显示该轨迹`;
-        btn?.classList.remove("visible");
-      }
-    }
-
-    function renderTrackList() {
-      const list = document.getElementById("track-list");
-      const tracks = MAP_DATA.tracks;
-      updateTrackListMeta();
-      list.innerHTML = tracks.map(t => {
-        const title = `#${t.id} · ${t.point_count} 点${t.task_name ? " · " + t.task_name : ""}`;
-        const parts = [
-          t.factory || "未知",
-          t.fly_type || "—",
-          t.duration_min != null ? `${t.duration_min} 分钟` : null,
-          t.distance_m != null ? `${(t.distance_m / 1000).toFixed(1)} km` : null,
-          t.max_height_m != null ? `${t.max_height_m} m` : null,
-          t.max_speed_kmh != null ? `${t.max_speed_kmh} km/h` : null,
-        ].filter(Boolean);
-        const meta = parts.join(" · ");
-        const hidden = !matchTrackFilters(t) || !matchRegion(t);
-        return `<div class="track-item${hidden ? " hidden" : ""}" data-id="${t.id}">
-          <span class="track-item-title">${title}</span>
-          <span class="track-item-meta">${meta || t.start_time || "—"}</span>
-        </div>`;
-      }).join("");
-      list.querySelectorAll(".track-item").forEach(el => {
-        el.addEventListener("click", () => focusTrack(Number(el.dataset.id)));
-      });
     }
 
     function airportPopup(a) {
@@ -848,10 +956,11 @@
           const latlngs = t.coords.map(c => [c[1], c[0]]);
           const color = t.has_record ? factoryColor(t) : "#95A5A6";
           const isSelected = selectedTrackId === t.id;
+          const dimOthers = selectedTrackId !== null && !soloTrackMode && !isSelected;
           const line = L.polyline(latlngs, {
             color,
             weight: isSelected ? 4 : 2,
-            opacity: isSelected ? 1 : 0.75,
+            opacity: isSelected ? 1 : (dimOthers ? 0.22 : 0.75),
           }).bindPopup(trackPopup(t));
           line.addTo(trackLayer);
           trackPolylines.set(t.id, line);
@@ -860,7 +969,7 @@
             color: "#fff",
             weight: 1,
             fillColor: color,
-            fillOpacity: 1,
+            fillOpacity: dimOthers ? 0.35 : 1,
           }).addTo(trackLayer);
           if (latlngs.length > 1) {
             L.circleMarker(latlngs[latlngs.length - 1], {
@@ -868,7 +977,7 @@
               color: "#fff",
               weight: 1,
               fillColor: color,
-              fillOpacity: 0.85,
+              fillOpacity: dimOthers ? 0.3 : 0.85,
             }).addTo(trackLayer);
           }
         });
@@ -878,15 +987,16 @@
 
     function clearTrackSelection() {
       selectedTrackId = null;
+      soloTrackMode = false;
       refreshLayers();
-      refreshTrackListVisibility();
-      document.querySelectorAll(".track-item").forEach(el => el.classList.remove("active"));
+      renderTrackList();
     }
 
     function focusTrack(id) {
       selectedTrackId = id;
+      soloTrackMode = false;
       refreshLayers();
-      updateTrackListMeta();
+      renderTrackList();
 
       const line = trackPolylines.get(id);
       const t = MAP_DATA.tracks.find(x => x.id === id);
@@ -896,34 +1006,15 @@
       } else if (t && t.coords.length) {
         map.setView([t.coords[0][1], t.coords[0][0]], 14);
       }
-      document.querySelectorAll(".track-item").forEach(el => {
-        el.classList.toggle("active", Number(el.dataset.id) === id);
-      });
       const activeEl = document.querySelector(`.track-item[data-id="${id}"]`);
       activeEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
 
-    function renderRouteChart() {
-      if (routeChart) routeChart.destroy();
-      routeChart = new Chart(document.getElementById("chart-route-dist"), {
-        type: "bar",
-        data: {
-          labels: MAP_DATA.routes.histogram.labels,
-          datasets: [{
-            data: MAP_DATA.routes.histogram.values,
-            backgroundColor: css("--accent"),
-            borderRadius: 3,
-          }],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { font: { size: 8 }, maxRotation: 45, color: css("--muted") }, grid: { display: false } },
-            y: { ticks: { font: { size: 8 }, color: css("--muted") }, grid: { color: css("--border") } },
-          },
-        },
-      });
+    function enterSoloTrackMode() {
+      if (selectedTrackId === null) return;
+      soloTrackMode = true;
+      refreshLayers();
+      updateTrackListMeta();
     }
 
     function setTheme(name) {
@@ -933,7 +1024,6 @@
       });
       localStorage.setItem("dashboard-theme", name);
       applyBasemap(name);
-      if (MAP_DATA) renderRouteChart();
     }
 
     document.querySelectorAll(".theme-btn").forEach(btn => {
@@ -943,13 +1033,23 @@
     ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
       document.getElementById(id).addEventListener("change", () => {
         updateFilterCountBadge();
-        refreshTrackListVisibility();
+        updateFilterStatus();
+        renderTrackList();
         refreshLayers();
       });
     });
     document.getElementById("btn-reset-view").addEventListener("click", fitDefaultView);
-    document.getElementById("btn-show-all-tracks").addEventListener("click", clearTrackSelection);
+    document.getElementById("btn-solo-track")?.addEventListener("click", enterSoloTrackMode);
+    document.getElementById("btn-clear-selection")?.addEventListener("click", clearTrackSelection);
     document.getElementById("btn-reset-filters")?.addEventListener("click", resetTrackFilters);
+    document.getElementById("track-search")?.addEventListener("input", e => {
+      trackSearchQuery = e.target.value;
+      renderTrackList();
+    });
+    document.getElementById("track-sort")?.addEventListener("change", e => {
+      trackSortKey = e.target.value;
+      renderTrackList();
+    });
 
     const savedTheme = localStorage.getItem("dashboard-theme");
     if (savedTheme) setTheme(savedTheme);
@@ -967,8 +1067,8 @@
         document.getElementById("meta-range").style.color = "";
         renderKPIs();
         renderFactoryFilters();
+        updateFilterStatus();
         renderTrackList();
-        renderRouteChart();
         if (typeof L === "undefined") {
           throw new Error("Leaflet 未加载，请检查网络");
         }
