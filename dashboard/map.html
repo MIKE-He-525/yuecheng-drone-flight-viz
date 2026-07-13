@@ -483,10 +483,6 @@
         <div><div class="lbl">行政内</div><div class="val">${adminPct}%</div></div>
         <div><div class="lbl">飞行记录</div><div class="val">${k.flights_total.toLocaleString()}</div></div>
         <div><div class="lbl">预定义航线</div><div class="val">${k.routes}</div></div>
-        <div class="bounds-note" style="grid-column:1/-1;font-size:0.62rem;color:var(--muted);line-height:1.4;padding-top:2px;border-top:1px dashed var(--border)">
-          行政内：${MAP_DATA.meta.district_name || "越城区"}（adcode ${MAP_DATA.meta.district_adcode || 330602}）<br>
-          行政内 ${(k.telemetry_in_district || 0).toLocaleString()} 点 · 行政外 ${(k.telemetry_out_of_district || 0).toLocaleString()} 点
-        </div>
       `;
       const rs = MAP_DATA.routes.distance_km;
       document.getElementById("route-stats").textContent =

@@ -648,7 +648,7 @@ def build_standalone_html(
     map_html = map_path.read_text(encoding="utf-8")
 
     dash_body_match = re.search(
-        r'(<div class="app">.*?</footer>\s*</div>)',
+        r'(<div class="app">.*?</section>\s*</div>)',
         index_html,
         flags=re.DOTALL,
     )
@@ -666,10 +666,6 @@ def build_standalone_html(
         '<button type="button" class="map-entry-btn" id="btn-go-map">进入地图 →</button>',
         dash_body,
         count=1,
-    )
-    dash_body = dash_body.replace(
-        "数据来源：clean_data/ · 由 build_dashboard.py 生成",
-        "单文件看板 · 数据已内嵌 · 由 build_dashboard.py 生成",
     )
 
     map_body = map_body_match.group(1)
