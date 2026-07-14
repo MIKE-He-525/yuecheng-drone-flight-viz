@@ -8,6 +8,7 @@ import argparse
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -26,7 +27,80 @@ FACTORY_LABELS = {"DJ": "大疆", "YD": "一电", "ZH": "纵横", "MMC": "科比
 FLY_TYPE_LABELS = {1: "任务飞行", 2: "自由飞行"}
 DURATION_MAX_MIN = 60
 TRACK_MAX_POINTS = 100
+SERIES_MAX_POINTS = 80  # 选中轨迹时序图最大点数（控制看板体积）
 SPEED_MAX_MPS = 25  # 约 90 km/h，过滤 GPS 跳点造成的虚高速度
+# 轨迹筛选起飞时间滑块固定区间（与 fly_record 统计口径一致）
+FILTER_DATE_MIN = date(2024, 9, 14)
+FILTER_DATE_MAX = date(2026, 5, 21)
+
+
+def build_track_series(group: pd.DataFrame, max_points: int = SERIES_MAX_POINTS) -> dict | None:
+    """从遥测生成高度 / 速度 / 累计距离随时间变化的降采样序列（供选中轨迹图表）。"""
+    g = group.sort_values("message_time").copy()
+    g["message_time"] = pd.to_datetime(g["message_time"], errors="coerce")
+    g = g[g["message_time"].notna()]
+    if len(g) < 2:
+        return None
+
+    t0 = g["message_time"].iloc[0]
+    t_min = ((g["message_time"] - t0).dt.total_seconds() / 60.0).to_numpy(dtype=float)
+    if "height" in g.columns:
+        height = pd.to_numeric(g["height"], errors="coerce").to_numpy(dtype=float)
+    else:
+        height = np.full(len(g), np.nan, dtype=float)
+
+    lon = g["longitude"].astype(float).to_numpy()
+    lat = g["latitude"].astype(float).to_numpy()
+    dt = g["message_time"].diff().dt.total_seconds().to_numpy(dtype=float)
+    # 近似平面距离（度 → 米）
+    step_m = np.sqrt(np.diff(lon) ** 2 + np.diff(lat) ** 2) * 111_000
+    speed = np.full(len(g), np.nan, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        speed[1:] = step_m / dt[1:]
+    speed[~np.isfinite(speed)] = np.nan
+    speed[(speed <= 0) | (speed >= SPEED_MAX_MPS)] = np.nan
+    # 孤立 NaN 用邻域前值填充，便于画线
+    speed_s = pd.Series(speed).ffill().bfill()
+    speed_kmh = speed_s.to_numpy(dtype=float) * 3.6
+
+    if "flight_distance" in g.columns:
+        flight_dist = pd.to_numeric(g["flight_distance"], errors="coerce")
+    else:
+        flight_dist = pd.Series(np.nan, index=g.index)
+    if flight_dist.notna().sum() >= max(2, len(g) // 4):
+        dist_m = flight_dist.ffill().bfill().to_numpy(dtype=float)
+        # 若非单调递增，改用累计线段长度
+        if np.nanmax(dist_m) <= 0 or np.sum(np.diff(dist_m) < -1) > len(g) * 0.2:
+            dist_m = np.concatenate([[0.0], np.cumsum(np.nan_to_num(step_m, nan=0.0))])
+    else:
+        dist_m = np.concatenate([[0.0], np.cumsum(np.nan_to_num(step_m, nan=0.0))])
+
+    n = len(g)
+    if n <= max_points:
+        idx = np.arange(n)
+    else:
+        idx = np.linspace(0, n - 1, max_points)
+        idx = np.unique(np.round(idx).astype(int))
+        idx[-1] = n - 1
+
+    def pack(arr: np.ndarray, decimals: int) -> list[float | None]:
+        out: list[float | None] = []
+        for i in idx:
+            v = arr[i]
+            if v is None or (isinstance(v, float) and (np.isnan(v) or np.isinf(v))):
+                out.append(None)
+            else:
+                out.append(round(float(v), decimals))
+        return out
+
+    return {
+        "t_min": pack(t_min, 2),
+        "height_m": pack(height, 1),
+        "speed_kmh": pack(speed_kmh, 1),
+        "distance_km": pack(dist_m / 1000.0, 3),
+        "lon": pack(lon, 6),
+        "lat": pack(lat, 6),
+    }
 
 
 def compute_track_telemetry_stats(group: pd.DataFrame) -> dict[str, float | None]:
@@ -84,8 +158,17 @@ def compute_filter_bounds(tracks: list[dict]) -> dict:
 
     factories = sorted({t.get("factory") or "未知" for t in tracks if t.get("has_record")})
     fly_types = sorted({t.get("fly_type") or "未知" for t in tracks})
+    day_span = (FILTER_DATE_MAX - FILTER_DATE_MIN).days
 
     return {
+        "date": {
+            "min": FILTER_DATE_MIN.isoformat(),
+            "max": FILTER_DATE_MAX.isoformat(),
+            "day_min": 0,
+            "day_max": int(day_span),
+            "unit": "日",
+            "label": "起飞时间",
+        },
         "duration_min": {"min": 0, "max": round(dur_max, 1), "unit": "分钟", "label": "飞行时长"},
         "distance_km": {"min": 0, "max": dist_max, "unit": "km", "label": "飞行距离"},
         "height_m": {"min": 0, "max": height_max, "unit": "m", "label": "飞行轨迹最大高度"},
@@ -209,11 +292,6 @@ def _patch_dashboard_script(script: str) -> str:
       document.getElementById("meta-range").textContent =
         `时间范围：${DATA.meta.date_range.start} ~ ${DATA.meta.date_range.end}`;
       document.getElementById("meta-range").style.color = "";
-      const mapDesc = document.getElementById("map-entry-desc");
-      if (mapDesc && DATA.kpis) {
-        mapDesc.textContent =
-          `${DATA.kpis.airports} 个机场 · ${DATA.kpis.tracks_with_telemetry || "—"} 条轨迹 · 覆盖范围 · 航线距离`;
-      }
       renderKPIs();
       applyLinearBorder();
       if (typeof Chart === "undefined") {
@@ -230,6 +308,7 @@ def _patch_dashboard_script(script: str) -> str:
 
 
 def _patch_map_script(script: str) -> str:
+    """剥离模板自启动逻辑，供单页嵌入后由启动脚本统一初始化。"""
     script = re.sub(
         r"const EMBEDDED_MAP_DATA = .*?;",
         "",
@@ -238,92 +317,136 @@ def _patch_map_script(script: str) -> str:
         flags=re.DOTALL,
     )
     script = re.sub(
-        r'fetch\("map_data\.json"\).*?\.catch\(err => \{.*?\}\);',
-        "",
-        script,
-        count=1,
-        flags=re.DOTALL,
-    )
-    script = script.replace("function renderKPIs()", "function renderMapKPIs()")
-    script = script.replace("renderKPIs();", "renderMapKPIs();")
-    script = script.replace('getElementById("meta-range")', 'getElementById("map-meta-range")')
-    script = re.sub(
-        r"function setTheme\(name\) \{.*?\n    \}\n",
-        "",
-        script,
-        count=1,
-        flags=re.DOTALL,
-    )
-    script = re.sub(
-        r'document\.querySelectorAll\("\.theme-btn"\)\.forEach\(btn => \{.*?\}\);\n',
-        "",
-        script,
-        count=1,
-        flags=re.DOTALL,
-    )
-    script = script.replace(
-        "const savedTheme = localStorage.getItem(\"dashboard-theme\");\n    if (savedTheme) setTheme(savedTheme);\n",
-        "",
-    )
-    script = script.replace("function initMap()", "function initMapView()")
-    script = script.replace("initMap();", "initMapView();")
-    script = re.sub(
-        r'\n\s*\["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"\]\.forEach\(id => \{[\s\S]*?\n    \}\);\n'
-        r'\s*document\.getElementById\("btn-reset-view"\)\.addEventListener\("click", fitDefaultView\);\n'
-        r'\s*document\.getElementById\("btn-solo-track"\)\?\.addEventListener\("click", enterSoloTrackMode\);\n'
-        r'\s*document\.getElementById\("btn-clear-selection"\)\?\.addEventListener\("click", clearTrackSelection\);\n'
-        r'\s*document\.getElementById\("btn-reset-filters"\)\?\.addEventListener\("click", resetTrackFilters\);\n'
-        r'\s*document\.getElementById\("track-search"\)\?\.addEventListener\("input", e => \{[\s\S]*?\n    \}\);\n'
-        r'\s*document\.getElementById\("track-sort"\)\?\.addEventListener\("change", e => \{[\s\S]*?\n    \}\);\n',
+        r"\n\s*const savedTheme = localStorage\.getItem\(\"dashboard-theme\"\);\n"
+        r"\s*if \(savedTheme\) \{\n\s*document\.documentElement\.dataset\.theme = savedTheme;\n\s*\}\n",
         "\n",
         script,
         count=1,
     )
+    script = re.sub(
+        r"\n\s*bindMapUi\(\);\s*\n\s*fetch\(\"map_data\.json\"\).*?\.catch\(err => \{.*?\}\);",
+        "\n",
+        script,
+        count=1,
+        flags=re.DOTALL,
+    )
+    script = script.replace("function initMap()", "function initMapView()")
+    script = script.replace("initMap();", "initMapView();")
     return script
 
 
 MAP_EXTRA_CSS = """
-    .view { display: none; }
-    .view.active { display: block; }
+    .map-section {
+      width: 100vw;
+      position: relative;
+      left: 50%;
+      right: 50%;
+      margin-left: -50vw;
+      margin-right: -50vw;
+      margin-top: 12px;
+      height: 100vh;
+      min-height: 100vh;
+      padding: 0;
+      border: none;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      box-sizing: border-box;
+    }
+    .map-section-header {
+      flex-shrink: 0;
+      display: flex; flex-wrap: wrap; align-items: baseline;
+      justify-content: space-between; gap: 8px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .map-section-header h2 {
+      font-size: 0.95rem; font-weight: 700; color: var(--heading);
+    }
+    .map-section-header .sub {
+      font-size: 0.72rem; color: var(--muted);
+    }
     .layout {
       display: grid;
-      grid-template-columns: 220px 1fr 300px;
-      min-height: 100vh;
+      grid-template-columns: 340px 1fr;
+      flex: 1;
+      min-height: 0;
+      height: auto;
+      border: none;
+      border-radius: 0;
+      overflow: hidden;
+      background: var(--surface);
     }
     @media (max-width: 1100px) {
       .layout {
         grid-template-columns: 1fr;
-        grid-template-rows: auto minmax(420px, 1fr) auto;
+        grid-template-rows: auto minmax(50vh, 1fr);
       }
     }
-    .sidebar {
-      background: var(--surface); border-right: 1px solid var(--border);
-      padding: 12px; overflow-y: auto; max-height: 100vh;
-      display: flex; flex-direction: column; gap: 10px;
+    .map-column {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
     }
-    @media (max-width: 1100px) {
-      .sidebar { max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+    .layer-bar {
+      flex-shrink: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .layer-bar-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--heading);
+      white-space: nowrap;
+    }
+    .layer-bar .layer-list {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 14px;
+      flex: 1;
+      min-width: 0;
+    }
+    .layer-bar .layer-list label { white-space: nowrap; }
+    .layer-bar #btn-reset-view {
+      width: auto;
+      margin: 0;
+      flex-shrink: 0;
     }
     .track-rail {
       background: var(--surface);
-      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
       padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      height: 100vh;
-      overflow: hidden;
-    }
-    .track-rail-filters {
-      flex-shrink: 0;
-      max-height: 46vh;
-      overflow-y: auto;
+      height: 100%;
       overflow-x: hidden;
+      overflow-y: auto;
+      min-height: 0;
       scrollbar-gutter: stable;
     }
+    .track-rail-filters {
+      flex: 0 0 auto;
+      max-height: none;
+      overflow: visible;
+    }
+    .track-rail-filters .panel-filters {
+      padding: 10px;
+    }
     .track-list-section {
-      flex: 1;
-      min-height: 0;
+      flex: 1 1 auto;
+      min-height: 160px;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -365,9 +488,9 @@ MAP_EXTRA_CSS = """
     @media (max-width: 1100px) {
       .track-rail {
         height: auto;
-        max-height: 320px;
-        border-left: none;
-        border-top: 1px solid var(--border);
+        max-height: min(70vh, 560px);
+        border-right: none;
+        border-bottom: 1px solid var(--border);
       }
     }
     .track-rail-header h2 {
@@ -381,60 +504,40 @@ MAP_EXTRA_CSS = """
       color: var(--muted);
       margin-top: 2px;
     }
-    .back-link {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 0.75rem; color: var(--accent); text-decoration: none; font-weight: 500;
-      background: none; border: none; cursor: pointer; padding: 0;
-    }
-    .back-link:hover { text-decoration: underline; }
-    .sidebar h1 { font-size: 1rem; font-weight: 700; color: var(--heading); line-height: 1.3; }
-    .sidebar .sub { font-size: 0.72rem; color: var(--muted); }
-    #view-map .theme-switcher { display: flex; flex-wrap: wrap; gap: 4px; }
-    #view-map .theme-btn {
-      border: 1px solid var(--border); background: var(--bg); color: var(--text);
-      padding: 3px 7px; border-radius: var(--radius-sm); font-size: 0.65rem;
-      cursor: pointer; transition: all 0.2s;
-    }
-    #view-map .theme-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-    .panel {
+    #section-map .panel {
       background: var(--bg); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 10px;
     }
-    .panel h3 { font-size: 0.78rem; font-weight: 600; color: var(--heading); margin-bottom: 8px; }
-    .kpi-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .kpi-mini div {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 6px 8px;
-    }
-    .kpi-mini .lbl { font-size: 0.65rem; color: var(--muted); }
-    .kpi-mini .val { font-size: 0.95rem; font-weight: 700; color: var(--heading); }
+    #section-map .panel h3 { font-size: 0.78rem; font-weight: 600; color: var(--heading); margin-bottom: 8px; }
     .layer-list { display: flex; flex-direction: column; gap: 6px; }
     .layer-list label {
       display: flex; align-items: center; gap: 8px;
       font-size: 0.75rem; cursor: pointer;
     }
     .layer-list input { accent-color: var(--accent); }
-    #view-map .filter-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-    #view-map .filter-btn {
+    #section-map .filter-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    #section-map .filter-btn {
       border: 1px solid var(--border); background: var(--surface);
       color: var(--text); padding: 3px 8px; border-radius: 999px;
       font-size: 0.68rem; cursor: pointer;
     }
-    #view-map .filter-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-    .filter-section { margin-top: 8px; }
+    #section-map .filter-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .filter-section { margin-top: 6px; }
     .filter-section:first-child { margin-top: 0; }
     .filter-label {
       font-size: 0.65rem; font-weight: 600; color: var(--muted);
-      margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 2px; display: flex; justify-content: space-between; align-items: baseline;
+      gap: 6px;
     }
     .filter-count-badge {
       font-weight: 500; color: var(--accent); font-size: 0.62rem;
     }
     .range-values {
-      font-weight: 500; color: var(--heading); font-size: 0.62rem; font-variant-numeric: tabular-nums;
+      font-weight: 500; color: var(--heading); font-size: 0.58rem;
+      font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
     }
     .dual-range {
-      position: relative; height: 28px; margin-top: 4px;
+      position: relative; height: 26px; margin-top: 2px;
     }
     .range-track {
       position: absolute; left: 7px; right: 7px; top: 50%;
@@ -448,7 +551,7 @@ MAP_EXTRA_CSS = """
     }
     .dual-range input[type="range"] {
       position: absolute; left: 0; right: 0; top: 0;
-      width: 100%; height: 28px; margin: 0;
+      width: 100%; height: 26px; margin: 0;
       background: transparent; pointer-events: none;
       -webkit-appearance: none; appearance: none;
     }
@@ -516,12 +619,84 @@ MAP_EXTRA_CSS = """
       color: var(--muted);
       font-size: 0.65rem;
     }
-    .track-item:hover, .track-item.active { background: var(--accent-soft); }
+    .track-item:hover, .track-item.active, .track-item.hovering { background: var(--accent-soft); }
     .track-item:last-child { border-bottom: none; }
-    .chart-mini { height: 110px; position: relative; }
-    .map-wrap { position: relative; min-height: 400px; height: 100vh; }
-    @media (max-width: 1100px) { .map-wrap { height: 100%; min-height: 420px; } }
+    .map-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      height: auto;
+    }
+    @media (max-width: 1100px) { .map-wrap { min-height: 50vh; } }
     #map { width: 100%; height: 100%; z-index: 0; }
+    .track-series-panel {
+      display: none;
+      flex-shrink: 0;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      padding: 10px 12px 12px;
+      max-height: min(36%, 280px);
+      min-height: 180px;
+      overflow: hidden;
+    }
+    .track-series-panel.visible { display: flex; flex-direction: column; gap: 8px; }
+    .track-series-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .track-series-header h3 {
+      font-size: 0.8rem; font-weight: 600; color: var(--heading); margin: 0;
+    }
+    .track-series-header .series-meta {
+      font-size: 0.68rem; color: var(--muted); margin-left: 8px; font-weight: 400;
+    }
+    .track-series-header .header-left { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; min-width: 0; }
+    .track-series-body {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 10px;
+      flex: 1;
+      min-height: 160px;
+    }
+    @media (max-width: 700px) {
+      .track-series-body { grid-template-columns: 1fr; }
+    }
+    .track-series-legend.panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px;
+      margin: 0;
+    }
+    .track-series-legend h3 {
+      font-size: 0.78rem; font-weight: 600; color: var(--heading); margin-bottom: 8px;
+    }
+    .track-series-legend .layer-list label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; cursor: pointer; color: var(--text);
+    }
+    .track-series-legend .layer-list input { accent-color: var(--accent); }
+    .track-series-swatch {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .track-series-chart {
+      position: relative; min-height: 160px; height: 180px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 6px 8px;
+    }
+    .leaflet-tooltip.series-pos-tooltip {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+    }
+    .leaflet-tooltip.series-pos-tooltip::before { border-top-color: var(--border); }
     .map-legend {
       position: absolute; bottom: 24px; left: 12px; z-index: 1000;
       background: var(--surface); border: 1px solid var(--border);
@@ -545,17 +720,9 @@ ROUTER_SCRIPT = """
     let mapPayloadCache = null;
     let mapViewReady = false;
     let mapUiBound = false;
-    let currentView = "dashboard";
 
     function setDashboardStatus(msg, isError = false) {
       const el = document.getElementById("meta-range");
-      if (!el) return;
-      el.textContent = msg;
-      el.style.color = isError ? "var(--negative, #F53F3F)" : "";
-    }
-
-    function setMapStatus(msg, isError = false) {
-      const el = document.getElementById("map-meta-range");
       if (!el) return;
       el.textContent = msg;
       el.style.color = isError ? "var(--negative, #F53F3F)" : "";
@@ -567,31 +734,6 @@ ROUTER_SCRIPT = """
         throw new Error("未找到内嵌数据 #" + id);
       }
       return JSON.parse(node.textContent);
-    }
-
-    function bindMapUi() {
-      if (mapUiBound) return;
-      mapUiBound = true;
-      ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
-        document.getElementById(id)?.addEventListener("change", () => {
-          updateFilterCountBadge();
-          updateFilterStatus();
-          renderTrackList();
-          refreshLayers();
-        });
-      });
-      document.getElementById("btn-reset-view")?.addEventListener("click", fitDefaultView);
-      document.getElementById("btn-solo-track")?.addEventListener("click", enterSoloTrackMode);
-      document.getElementById("btn-clear-selection")?.addEventListener("click", clearTrackSelection);
-      document.getElementById("btn-reset-filters")?.addEventListener("click", resetTrackFilters);
-      document.getElementById("track-search")?.addEventListener("input", e => {
-        trackSearchQuery = e.target.value;
-        renderTrackList();
-      });
-      document.getElementById("track-sort")?.addEventListener("change", e => {
-        trackSortKey = e.target.value;
-        renderTrackList();
-      });
     }
 
     function ensureMapData() {
@@ -619,36 +761,54 @@ ROUTER_SCRIPT = """
         if (typeof Chart !== "undefined") renderCharts();
       }
       if (typeof applyBasemap === "function" && map) applyBasemap(name);
+      if (selectedTrackId != null && typeof MAP_DATA !== "undefined" && MAP_DATA) {
+        const t = MAP_DATA.tracks.find(x => x.id === selectedTrackId);
+        if (t && typeof renderTrackSeriesChart === "function") renderTrackSeriesChart(t);
+      }
     }
 
-    function showView(view) {
-      currentView = view;
-      document.getElementById("view-dashboard").classList.toggle("active", view === "dashboard");
-      document.getElementById("view-map").classList.toggle("active", view === "map");
-      if (view !== "map") return;
+    function bootMapSection() {
+      if (mapViewReady) {
+        if (map) setTimeout(() => map.invalidateSize(), 50);
+        return;
+      }
       try {
         ensureMapData();
-        bindMapUi();
+        if (!mapUiBound) {
+          bindMapUi();
+          mapUiBound = true;
+        }
         if (typeof L === "undefined") {
           throw new Error("Leaflet 未加载，请检查网络后刷新");
         }
-        if (!mapViewReady) {
-          document.getElementById("map-meta-range").textContent =
-            "时间范围：" + MAP_DATA.meta.date_range.start + " ~ " + MAP_DATA.meta.date_range.end;
-          document.getElementById("map-meta-range").style.color = "";
-          renderMapKPIs();
-          renderFactoryFilters();
-          updateFilterStatus();
-          renderTrackList();
-          initMapView();
-          mapViewReady = true;
-        } else if (map) {
-          setTimeout(() => map.invalidateSize(), 50);
-        }
+        setMapStatus(
+          "时间范围：" + MAP_DATA.meta.date_range.start + " ~ " + MAP_DATA.meta.date_range.end,
+        );
+        renderFactoryFilters();
+        updateFilterStatus();
+        renderTrackList();
+        initMapView();
+        mapViewReady = true;
+        setTimeout(() => { if (map) map.invalidateSize(); }, 80);
       } catch (err) {
         setMapStatus("地图加载失败：" + err.message, true);
         console.error(err);
       }
+    }
+
+    function watchMapSection() {
+      const el = document.getElementById("section-map");
+      if (!el || typeof IntersectionObserver === "undefined") {
+        bootMapSection();
+        return;
+      }
+      const io = new IntersectionObserver((entries) => {
+        if (entries.some(e => e.isIntersecting)) {
+          io.disconnect();
+          bootMapSection();
+        }
+      }, { rootMargin: "240px 0px" });
+      io.observe(el);
     }
 
     function startup() {
@@ -660,13 +820,8 @@ ROUTER_SCRIPT = """
         setDashboardStatus("数据加载失败：" + err.message, true);
         console.error(err);
       }
+      watchMapSection();
     }
-
-    document.getElementById("btn-go-map").addEventListener("click", () => showView("map"));
-    document.getElementById("btn-back-dashboard").addEventListener("click", (e) => {
-      e.preventDefault();
-      showView("dashboard");
-    });
 
     document.querySelectorAll(".theme-btn").forEach(btn => {
       btn.addEventListener("click", () => applyTheme(btn.dataset.theme));
@@ -674,6 +829,10 @@ ROUTER_SCRIPT = """
 
     const savedTheme = localStorage.getItem("dashboard-theme");
     if (savedTheme && THEMES.includes(savedTheme)) applyTheme(savedTheme);
+
+    window.addEventListener("resize", () => {
+      if (map) map.invalidateSize();
+    });
 
     startup();
 """
@@ -684,7 +843,7 @@ def build_standalone_html(
     payload: dict,
     map_payload: dict,
 ) -> None:
-    """合并 index + map 为单文件 dashboard.html（数据内嵌；Chart.js/Leaflet/地图瓦片需联网）。"""
+    """合并 index + map 为单页滚动 dashboard.html（汇总 + 地图一体）。"""
     index_path = dashboard_dir / "index.html"
     map_path = dashboard_dir / "map.html"
     output_path = dashboard_dir / "dashboard.html"
@@ -701,27 +860,19 @@ def build_standalone_html(
         flags=re.DOTALL,
     )
     map_body_match = re.search(
-        r'(<div class="layout">[\s\S]*<aside class="track-rail">[\s\S]*?</aside>\s*</div>)',
+        r'(<section id="section-map"[\s\S]*?</section>)',
         map_html,
         flags=re.DOTALL,
     )
     if not dash_body_match or not map_body_match:
         raise RuntimeError("无法解析 index.html / map.html 结构")
 
-    dash_body = dash_body_match.group(1)
-    dash_body = re.sub(
-        r'<a class="map-entry-btn" href="[^"]*">进入地图 →</a>',
-        '<button type="button" class="map-entry-btn" id="btn-go-map">进入地图 →</button>',
-        dash_body,
-        count=1,
-    )
-
+    dash_body = dash_body_match.group(1).rstrip()
+    if not dash_body.endswith("</div>"):
+        raise RuntimeError("无法解析 index.html 的 .app 闭合标签")
+    dash_inner = dash_body[: -len("</div>")].rstrip()
     map_body = map_body_match.group(1)
-    map_body = map_body.replace(
-        '<a class="back-link" href="index.html">← 返回总览看板</a>',
-        '<button type="button" class="back-link" id="btn-back-dashboard">← 返回总览看板</button>',
-    )
-    map_body = map_body.replace('id="meta-range"', 'id="map-meta-range"')
+    page_body = f"{dash_inner}\n\n{map_body}\n  </div>"
 
     index_style = _extract_style(index_html)
     dash_script = _patch_dashboard_script(_extract_script(index_html))
@@ -748,12 +899,7 @@ def build_standalone_html(
   </style>
 </head>
 <body>
-  <div id="view-dashboard" class="view active">
-{dash_body}
-  </div>
-  <div id="view-map" class="view">
-{map_body}
-  </div>
+{page_body}
   <script type="application/json" id="embedded-dashboard-data">{dashboard_json}</script>
   <script type="application/json" id="embedded-map-data">{map_json}</script>
   <script>
@@ -938,6 +1084,9 @@ def build_map_payload(tables: dict[str, pd.DataFrame]) -> dict:
             "in_district_ratio": round(float(tel_in_district.loc[group.index].mean()), 3),
         }
         meta.update(compute_track_telemetry_stats(group))
+        series = build_track_series(group)
+        if series:
+            meta["series"] = series
 
         if int(fid) in rec_lookup.index:
             r = rec_lookup.loc[int(fid)]

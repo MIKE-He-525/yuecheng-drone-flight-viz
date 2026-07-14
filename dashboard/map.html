@@ -17,47 +17,121 @@
       background: var(--bg); color: var(--text);
       min-height: 100vh; transition: background 0.35s, color 0.35s;
     }
+    .map-section {
+      width: 100vw;
+      position: relative;
+      left: 50%;
+      right: 50%;
+      margin-left: -50vw;
+      margin-right: -50vw;
+      margin-top: 12px;
+      height: 100vh;
+      min-height: 100vh;
+      padding: 0;
+      border: none;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      box-sizing: border-box;
+    }
+    .map-section-header {
+      flex-shrink: 0;
+      display: flex; flex-wrap: wrap; align-items: baseline;
+      justify-content: space-between; gap: 8px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .map-section-header h2 {
+      font-size: 0.95rem; font-weight: 700; color: var(--heading);
+    }
+    .map-section-header .sub {
+      font-size: 0.72rem; color: var(--muted);
+    }
     .layout {
       display: grid;
-      grid-template-columns: 220px 1fr 300px;
-      min-height: 100vh;
+      grid-template-columns: 340px 1fr;
+      flex: 1;
+      min-height: 0;
+      height: auto;
+      border: none;
+      border-radius: 0;
+      overflow: hidden;
+      background: var(--surface);
     }
     @media (max-width: 1100px) {
       .layout {
         grid-template-columns: 1fr;
-        grid-template-rows: auto minmax(420px, 1fr) auto;
+        grid-template-rows: auto minmax(50vh, 1fr);
       }
     }
 
-    .sidebar {
-      background: var(--surface); border-right: 1px solid var(--border);
-      padding: 12px; overflow-y: auto; max-height: 100vh;
-      display: flex; flex-direction: column; gap: 10px;
+    .map-column {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
     }
-    @media (max-width: 1100px) {
-      .sidebar { max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+    .layer-bar {
+      flex-shrink: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .layer-bar-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--heading);
+      white-space: nowrap;
+    }
+    .layer-bar .layer-list {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 14px;
+      flex: 1;
+      min-width: 0;
+    }
+    .layer-bar .layer-list label {
+      white-space: nowrap;
+    }
+    .layer-bar #btn-reset-view {
+      width: auto;
+      margin: 0;
+      flex-shrink: 0;
     }
 
     .track-rail {
       background: var(--surface);
-      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
       padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      height: 100vh;
-      overflow: hidden;
-    }
-    .track-rail-filters {
-      flex-shrink: 0;
-      max-height: 46vh;
-      overflow-y: auto;
+      height: 100%;
       overflow-x: hidden;
+      overflow-y: auto;
+      min-height: 0;
       scrollbar-gutter: stable;
     }
+    .track-rail-filters {
+      flex: 0 0 auto;
+      max-height: none;
+      overflow: visible;
+    }
+    .track-rail-filters .panel-filters {
+      padding: 10px;
+    }
     .track-list-section {
-      flex: 1;
-      min-height: 0;
+      flex: 1 1 auto;
+      min-height: 160px;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -95,9 +169,9 @@
     @media (max-width: 1100px) {
       .track-rail {
         height: auto;
-        max-height: 320px;
-        border-left: none;
-        border-top: 1px solid var(--border);
+        max-height: min(70vh, 560px);
+        border-right: none;
+        border-bottom: 1px solid var(--border);
       }
     }
     .track-rail-header h2 {
@@ -117,35 +191,12 @@
     .panel-filters h3 {
       display: flex; align-items: center; justify-content: space-between; gap: 6px;
     }
-    .back-link {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 0.75rem; color: var(--accent); text-decoration: none; font-weight: 500;
-    }
-    .back-link:hover { text-decoration: underline; }
-    .sidebar h1 { font-size: 1rem; font-weight: 700; color: var(--heading); line-height: 1.3; }
-    .sidebar .sub { font-size: 0.72rem; color: var(--muted); }
-
-    .theme-switcher { display: flex; flex-wrap: wrap; gap: 4px; }
-    .theme-btn {
-      border: 1px solid var(--border); background: var(--bg); color: var(--text);
-      padding: 3px 7px; border-radius: var(--radius-sm); font-size: 0.65rem;
-      cursor: pointer; transition: all 0.2s;
-    }
-    .theme-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 
     .panel {
       background: var(--bg); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 10px;
     }
     .panel h3 { font-size: 0.78rem; font-weight: 600; color: var(--heading); margin-bottom: 8px; }
-
-    .kpi-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .kpi-mini div {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 6px 8px;
-    }
-    .kpi-mini .lbl { font-size: 0.65rem; color: var(--muted); }
-    .kpi-mini .val { font-size: 0.95rem; font-weight: 700; color: var(--heading); }
 
     .layer-list { display: flex; flex-direction: column; gap: 6px; }
     .layer-list label {
@@ -162,18 +213,20 @@
     }
     .filter-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
-    .filter-section { margin-top: 8px; }
+    .filter-section { margin-top: 6px; }
     .filter-section:first-child { margin-top: 0; }
     .filter-label {
       font-size: 0.65rem; font-weight: 600; color: var(--muted);
-      margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 2px; display: flex; justify-content: space-between; align-items: baseline;
+      gap: 6px;
     }
     .filter-count-badge { font-weight: 500; color: var(--accent); font-size: 0.62rem; }
     .range-values {
-      font-weight: 500; color: var(--heading); font-size: 0.62rem; font-variant-numeric: tabular-nums;
+      font-weight: 500; color: var(--heading); font-size: 0.58rem;
+      font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
     }
     .dual-range {
-      position: relative; height: 28px; margin-top: 4px;
+      position: relative; height: 26px; margin-top: 2px;
     }
     .range-track {
       position: absolute; left: 7px; right: 7px; top: 50%;
@@ -187,7 +240,7 @@
     }
     .dual-range input[type="range"] {
       position: absolute; left: 0; right: 0; top: 0;
-      width: 100%; height: 28px; margin: 0;
+      width: 100%; height: 26px; margin: 0;
       background: transparent; pointer-events: none;
       -webkit-appearance: none; appearance: none;
     }
@@ -267,13 +320,16 @@
       color: var(--muted);
       font-size: 0.65rem;
     }
-    .track-item:hover, .track-item.active { background: var(--accent-soft); }
+    .track-item:hover, .track-item.active, .track-item.hovering { background: var(--accent-soft); }
     .track-item:last-child { border-bottom: none; }
 
-    .chart-mini { height: 110px; position: relative; }
-
-    .map-wrap { position: relative; min-height: 400px; height: 100vh; }
-    @media (max-width: 1100px) { .map-wrap { height: 100%; min-height: 420px; } }
+    .map-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      height: auto;
+    }
+    @media (max-width: 1100px) { .map-wrap { min-height: 50vh; } }
     #map { width: 100%; height: 100%; z-index: 0; }
 
     .map-legend {
@@ -317,6 +373,78 @@
       --radius: 10px; --radius-sm: 8px;
     }
 
+    .track-series-panel {
+      display: none;
+      flex-shrink: 0;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      padding: 10px 12px 12px;
+      max-height: min(36%, 280px);
+      min-height: 180px;
+      overflow: hidden;
+    }
+    .track-series-panel.visible { display: flex; flex-direction: column; gap: 8px; }
+    .track-series-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .track-series-header h3 {
+      font-size: 0.8rem; font-weight: 600; color: var(--heading); margin: 0;
+    }
+    .track-series-header .series-meta {
+      font-size: 0.68rem; color: var(--muted); margin-left: 8px; font-weight: 400;
+    }
+    .track-series-header .header-left { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; min-width: 0; }
+    .track-series-body {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 10px;
+      flex: 1;
+      min-height: 160px;
+    }
+    @media (max-width: 700px) {
+      .track-series-body { grid-template-columns: 1fr; }
+    }
+    .track-series-legend.panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px;
+      margin: 0;
+    }
+    .track-series-legend h3 {
+      font-size: 0.78rem; font-weight: 600; color: var(--heading); margin-bottom: 8px;
+    }
+    .track-series-legend .layer-list label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; cursor: pointer; color: var(--text);
+    }
+    .track-series-legend .layer-list input { accent-color: var(--accent); }
+    .track-series-swatch {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .track-series-chart {
+      position: relative; min-height: 160px; height: 180px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 6px 8px;
+    }
+    .track-series-empty {
+      font-size: 0.72rem; color: var(--muted); padding: 24px 8px; text-align: center;
+    }
+    .leaflet-tooltip.series-pos-tooltip {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+    }
+    .leaflet-tooltip.series-pos-tooltip::before { border-top-color: var(--border); }
+
     .leaflet-popup-content { font-size: 0.78rem; line-height: 1.45; margin: 10px 12px; }
     .leaflet-popup-content b { color: #1D2129; }
     [data-theme="linear"] .leaflet-popup-content b { color: #F4F5F8; }
@@ -325,52 +453,12 @@
   </style>
 </head>
 <body>
+  <section id="section-map" class="map-section">
+    <div class="map-section-header">
+      <h2>空间地图</h2>
+      <p class="sub" id="map-status">加载中…</p>
+    </div>
   <div class="layout">
-    <aside class="sidebar">
-      <a class="back-link" href="index.html">← 返回总览看板</a>
-      <div>
-        <h1>空间地图可视化</h1>
-        <p class="sub" id="meta-range">加载中…</p>
-      </div>
-
-      <div class="theme-switcher">
-        <button class="theme-btn" data-theme="claude">Claude</button>
-        <button class="theme-btn" data-theme="material">Material</button>
-        <button class="theme-btn" data-theme="vercel">Vercel</button>
-        <button class="theme-btn" data-theme="linear">Linear</button>
-        <button class="theme-btn active" data-theme="saas">SaaS</button>
-      </div>
-
-      <div class="panel">
-        <h3>空间数据概览</h3>
-        <div class="kpi-mini" id="kpi-mini"></div>
-      </div>
-
-      <div class="panel">
-        <h3>图层控制</h3>
-        <div class="layer-list">
-          <label><input type="checkbox" id="layer-airports" checked /> 机场点位（全部）</label>
-          <label><input type="checkbox" id="layer-coverage" checked /> 机场覆盖半径</label>
-          <label><input type="checkbox" id="layer-tracks" checked /> 飞行轨迹</label>
-          <label><input type="checkbox" id="layer-district" checked /> 显示越城区行政区划</label>
-          <label><input type="checkbox" id="layer-region-only" /> 仅显示行政区内轨迹</label>
-        </div>
-        <button type="button" class="filter-btn" id="btn-reset-view" style="margin-top:8px;width:100%;">重置默认视野</button>
-      </div>
-    </aside>
-
-    <main class="map-wrap">
-      <div id="map"></div>
-      <div class="map-legend">
-        <strong style="font-size:0.72rem;color:var(--heading)">图例</strong>
-        <div><span class="dot" style="background:#E74C3C"></span>大疆机场/轨迹</div>
-        <div><span class="dot" style="background:#3498DB"></span>一电机场/轨迹</div>
-        <div><span class="dot" style="background:#2ECC71"></span>纵横机场/轨迹</div>
-        <div><span class="line-sample" style="background:transparent;border:2px solid #E67E22;height:0"></span>越城区行政区划</div>
-        <div><span class="line-sample" style="background:#95A5A6"></span>无记录关联轨迹</div>
-      </div>
-    </main>
-
     <aside class="track-rail">
       <div class="track-rail-filters">
         <div class="panel panel-filters">
@@ -384,6 +472,18 @@
           <div class="filter-section">
             <div class="filter-label">任务类型</div>
             <div class="filter-row" id="flytype-filters"></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>起飞时间</span>
+              <span class="range-values" id="filter-date-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-date-fill"></div></div>
+              <input type="range" id="filter-date-min" class="range-min" />
+              <input type="range" id="filter-date-max" class="range-max" />
+            </div>
           </div>
 
           <div class="filter-section">
@@ -448,7 +548,7 @@
       <div class="track-list-section">
         <div class="track-rail-header">
           <h2>筛选结果 <span class="filter-count-badge" id="list-count-badge">—</span></h2>
-          <p id="track-list-meta">点击定位 · 高亮显示</p>
+          <p id="track-list-meta">点击定位 · 默认仅看此条</p>
           <div class="track-actions">
             <button type="button" class="filter-btn" id="btn-solo-track">仅看此条</button>
             <button type="button" class="filter-btn" id="btn-clear-selection">取消选中</button>
@@ -465,7 +565,51 @@
         <div class="track-list" id="track-list"></div>
       </div>
     </aside>
+
+    <div class="map-column">
+      <div class="layer-bar" role="toolbar" aria-label="图层控制">
+        <span class="layer-bar-title">图层控制</span>
+        <div class="layer-list">
+          <label><input type="checkbox" id="layer-airports" /> 机场点位（全部）</label>
+          <label><input type="checkbox" id="layer-coverage" /> 机场覆盖半径</label>
+          <label><input type="checkbox" id="layer-tracks" checked /> 飞行轨迹</label>
+          <label><input type="checkbox" id="layer-district" checked /> 显示越城区行政区划</label>
+          <label><input type="checkbox" id="layer-region-only" /> 仅显示行政区内轨迹</label>
+        </div>
+        <button type="button" class="filter-btn" id="btn-reset-view">重置默认视野</button>
+      </div>
+      <main class="map-wrap">
+        <div id="map"></div>
+        <div class="map-legend">
+          <strong style="font-size:0.72rem;color:var(--heading)">图例</strong>
+          <div><span class="dot" style="background:#E74C3C"></span>大疆机场/轨迹</div>
+          <div><span class="dot" style="background:#3498DB"></span>一电机场/轨迹</div>
+          <div><span class="dot" style="background:#2ECC71"></span>纵横机场/轨迹</div>
+          <div><span class="line-sample" style="background:transparent;border:2px solid #E67E22;height:0"></span>越城区行政区划</div>
+          <div><span class="line-sample" style="background:#95A5A6"></span>无记录关联轨迹</div>
+        </div>
+      </main>
+      <div id="track-series-panel" class="track-series-panel" aria-live="polite">
+        <div class="track-series-header">
+          <div class="header-left">
+            <h3 id="track-series-title">轨迹时序</h3>
+            <span class="series-meta" id="track-series-meta"></span>
+          </div>
+          <button type="button" class="filter-btn" id="btn-close-series">关闭图表</button>
+        </div>
+        <div class="track-series-body">
+          <aside class="track-series-legend panel">
+            <h3>图例</h3>
+            <div class="layer-list" id="track-series-legend"></div>
+          </aside>
+          <div class="track-series-chart">
+            <canvas id="chart-track-series"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
+  </section>
 
   <script>
     const FACTORY_COLORS = { "大疆": "#E74C3C", "DJ": "#E74C3C", "一电": "#3498DB", "YD": "#3498DB", "纵横": "#2ECC71", "ZH": "#2ECC71", "未知": "#95A5A6" };
@@ -478,16 +622,23 @@
     let coverageLayer = null;
     let trackLayer = null;
     let districtLayer = null;
-    let trackPolylines = new Map();
+    let trackPolylines = new Map(); // id -> { line, hit }
+    const TRACK_HIT_WEIGHT = 18; // 透明命中层线宽，扩大点选/悬停判定范围
     let selectedTrackId = null;
+    let hoverTrackId = null;
     let soloTrackMode = false;
     let trackSearchQuery = "";
     let trackSortKey = "points";
     let filterBounds = null;
     let rangeFiltersBound = false;
+    let trackSeriesChart = null;
+    let seriesChartTrack = null;
+    let seriesPosMarker = null;
     let trackFilters = {
       factory: "all",
       flyType: "all",
+      dateMin: null,
+      dateMax: null,
       durationMin: null,
       durationMax: null,
       distanceMin: null,
@@ -528,19 +679,11 @@
       return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     }
 
-    function renderKPIs() {
-      const k = MAP_DATA.kpis;
-      const adminPct = k.telemetry_in_district_pct != null
-        ? k.telemetry_in_district_pct
-        : (k.telemetry_points ? Math.round((k.telemetry_in_district || 0) / k.telemetry_points * 1000) / 10 : 0);
-      document.getElementById("kpi-mini").innerHTML = `
-        <div><div class="lbl">机场</div><div class="val">${k.airports}</div></div>
-        <div><div class="lbl">轨迹</div><div class="val">${k.tracks}</div></div>
-        <div><div class="lbl">遥测点</div><div class="val">${k.telemetry_points.toLocaleString()}</div></div>
-        <div><div class="lbl">行政内</div><div class="val">${adminPct}%</div></div>
-        <div><div class="lbl">飞行记录</div><div class="val">${k.flights_total.toLocaleString()}</div></div>
-        <div><div class="lbl">预定义航线</div><div class="val">${k.routes}</div></div>
-      `;
+    function setMapStatus(msg, isError = false) {
+      const el = document.getElementById("map-status");
+      if (!el) return;
+      el.textContent = msg;
+      el.style.color = isError ? "var(--negative, #F53F3F)" : "";
     }
 
     function renderFactoryFilters() {
@@ -569,6 +712,37 @@
     function updateRangeLabel(labelId, minV, maxV, decimals) {
       const el = document.getElementById(labelId);
       if (el) el.textContent = `${formatRangeVal(minV, decimals)} – ${formatRangeVal(maxV, decimals)}`;
+    }
+
+    function dayIndexToIso(dayIndex) {
+      const base = filterBounds?.date?.min || "2024-09-14";
+      const [y, m, d] = base.split("-").map(Number);
+      const dt = new Date(y, m - 1, d + Number(dayIndex));
+      const yy = dt.getFullYear();
+      const mm = String(dt.getMonth() + 1).padStart(2, "0");
+      const dd = String(dt.getDate()).padStart(2, "0");
+      return `${yy}-${mm}-${dd}`;
+    }
+
+    function isoToDayIndex(iso) {
+      if (!iso || iso.length < 10) return null;
+      const base = filterBounds?.date?.min || "2024-09-14";
+      const [y0, m0, d0] = base.split("-").map(Number);
+      const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+      const a = Date.UTC(y, m - 1, d);
+      const b = Date.UTC(y0, m0 - 1, d0);
+      return Math.round((a - b) / 86400000);
+    }
+
+    function updateDateRangeLabel(minDay, maxDay) {
+      const el = document.getElementById("filter-date-values");
+      if (el) el.textContent = `${dayIndexToIso(minDay)} – ${dayIndexToIso(maxDay)}`;
+    }
+
+    function trackStartDayIndex(t) {
+      const s = (t.start_time || "").slice(0, 10);
+      if (!s) return null;
+      return isoToDayIndex(s);
     }
 
     function updateRangeFill(minId, maxId, fillId) {
@@ -608,12 +782,13 @@
       if (rangeFiltersBound) return;
       rangeFiltersBound = true;
       const specs = [
+        ["filter-date-min", "filter-date-max", "filter-date-values", "filter-date-fill", "date"],
         ["filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", 0],
         ["filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", 1],
         ["filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", 0],
         ["filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", 0],
       ];
-      specs.forEach(([minId, maxId, labelId, fillId, decimals]) => {
+      specs.forEach(([minId, maxId, labelId, fillId, decimalsOrDate]) => {
         const minEl = document.getElementById(minId);
         const maxEl = document.getElementById(maxId);
         if (!minEl || !maxEl) return;
@@ -626,7 +801,8 @@
             minV = Number(minEl.value);
             maxV = Number(maxEl.value);
           }
-          updateRangeLabel(labelId, minV, maxV, decimals);
+          if (decimalsOrDate === "date") updateDateRangeLabel(minV, maxV);
+          else updateRangeLabel(labelId, minV, maxV, decimalsOrDate);
           updateRangeFill(minId, maxId, fillId);
           applyTrackFilters();
         };
@@ -649,6 +825,13 @@
       });
 
       const b = filterBounds;
+      if (b.date) {
+        configureRangeSlider(
+          "filter-date-min", "filter-date-max", "filter-date-values", "filter-date-fill",
+          { min: b.date.day_min, max: b.date.day_max }, 1, 0,
+        );
+        updateDateRangeLabel(b.date.day_min, b.date.day_max);
+      }
       configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 0.1, 1);
       configureRangeSlider("filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", b.distance_km, 0.1, 1);
       configureRangeSlider("filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", b.height_m, 1, 0);
@@ -660,10 +843,13 @@
     }
 
     function syncFilterStateFromInputs() {
+      const dateR = readRangeSlider("filter-date-min", "filter-date-max");
       const dur = readRangeSlider("filter-duration-min", "filter-duration-max");
       const dist = readRangeSlider("filter-distance-min", "filter-distance-max");
       const h = readRangeSlider("filter-height-min", "filter-height-max");
       const spd = readRangeSlider("filter-speed-min", "filter-speed-max");
+      trackFilters.dateMin = dateR.min;
+      trackFilters.dateMax = dateR.max;
       trackFilters.durationMin = dur.min;
       trackFilters.durationMax = dur.max;
       trackFilters.distanceMin = dist.min;
@@ -686,6 +872,13 @@
       });
 
       const b = filterBounds;
+      if (b.date) {
+        configureRangeSlider(
+          "filter-date-min", "filter-date-max", "filter-date-values", "filter-date-fill",
+          { min: b.date.day_min, max: b.date.day_max }, 1, 0,
+        );
+        updateDateRangeLabel(b.date.day_min, b.date.day_max);
+      }
       configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 0.1, 1);
       configureRangeSlider("filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", b.distance_km, 0.1, 1);
       configureRangeSlider("filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", b.height_m, 1, 0);
@@ -711,6 +904,9 @@
       if (trackFilters.factory !== "all") chips.push(trackFilters.factory);
       if (trackFilters.flyType !== "all") chips.push(trackFilters.flyType);
       const b = filterBounds;
+      if (b.date && (trackFilters.dateMin > b.date.day_min || trackFilters.dateMax < b.date.day_max)) {
+        chips.push(`${dayIndexToIso(trackFilters.dateMin)}～${dayIndexToIso(trackFilters.dateMax)}`);
+      }
       if (trackFilters.durationMin > b.duration_min.min || trackFilters.durationMax < b.duration_min.max) {
         chips.push(`时长 ${formatRangeVal(trackFilters.durationMin, 0)}–${formatRangeVal(trackFilters.durationMax, 0)} 分`);
       }
@@ -815,7 +1011,79 @@
         </div>`;
       }).join("");
       list.querySelectorAll(".track-item[data-id]").forEach(el => {
-        el.addEventListener("click", () => focusTrack(Number(el.dataset.id)));
+        const id = Number(el.dataset.id);
+        el.addEventListener("click", () => focusTrack(id));
+        el.addEventListener("mouseenter", () => setHoverTrack(id));
+        el.addEventListener("mouseleave", () => setHoverTrack(null));
+      });
+    }
+
+    function trackLineStyle(t) {
+      const color = t.has_record ? factoryColor(t) : "#95A5A6";
+      const isSelected = selectedTrackId === t.id;
+      const isHover = hoverTrackId === t.id;
+      const dimOthers = selectedTrackId !== null && !soloTrackMode && !isSelected && !isHover;
+      // 默认与「非选中弱化」同为浅色；选中 / 悬停仅提高透明度高亮，不加粗
+      let weight = 2;
+      let opacity = 0.22;
+      if (isSelected || isHover) {
+        opacity = 1;
+      } else if (dimOthers) {
+        opacity = 0.22;
+      }
+      return { color, weight, opacity, isSelected, isHover, dimOthers };
+    }
+
+    function getTrackLineEntry(id) {
+      const entry = trackPolylines.get(id);
+      if (!entry) return null;
+      if (entry.line) return entry;
+      return { line: entry, hit: null };
+    }
+
+    function bindTrackInteractions(layer, trackId) {
+      layer.on("click", () => focusTrack(trackId));
+      layer.on("mouseover", () => {
+        setHoverTrack(trackId);
+        if (map) map.getContainer().style.cursor = "pointer";
+      });
+      layer.on("mouseout", () => {
+        setHoverTrack(null);
+        if (map) map.getContainer().style.cursor = "";
+      });
+    }
+
+    function applyTrackPolylineStyle(id) {
+      const entry = getTrackLineEntry(id);
+      const t = MAP_DATA?.tracks.find(x => x.id === id);
+      if (!entry?.line || !t) return;
+      const style = trackLineStyle(t);
+      entry.line.setStyle({
+        color: style.color,
+        weight: style.weight,
+        opacity: style.opacity,
+      });
+      if (entry.hit) {
+        entry.hit.setStyle({
+          color: style.color,
+          weight: TRACK_HIT_WEIGHT,
+          opacity: 0,
+        });
+      }
+      if (style.isSelected || style.isHover) {
+        entry.line.bringToFront();
+        entry.hit?.bringToFront();
+      }
+    }
+
+    function setHoverTrack(id) {
+      const prev = hoverTrackId;
+      if (prev === id) return;
+      hoverTrackId = id;
+      if (prev != null) applyTrackPolylineStyle(prev);
+      if (id != null) applyTrackPolylineStyle(id);
+      document.querySelectorAll(".track-item[data-id]").forEach(el => {
+        el.classList.toggle("hovering", Number(el.dataset.id) === id);
       });
     }
 
@@ -829,6 +1097,8 @@
     function matchTrackFilters(t) {
       if (trackFilters.factory !== "all" && t.factory !== trackFilters.factory) return false;
       if (trackFilters.flyType !== "all" && t.fly_type !== trackFilters.flyType) return false;
+      // 无起飞时间不排除（与其它空字段口径一致）
+      if (!inNumericRange(trackStartDayIndex(t), trackFilters.dateMin, trackFilters.dateMax)) return false;
       if (!inNumericRange(t.duration_min, trackFilters.durationMin, trackFilters.durationMax)) return false;
       const distKm = t.distance_m != null ? t.distance_m / 1000 : null;
       if (!inNumericRange(distKm, trackFilters.distanceMin, trackFilters.distanceMax)) return false;
@@ -889,10 +1159,11 @@
       applyBasemap(document.documentElement.dataset.theme);
       fitDefaultView();
 
+      // 自下而上：机场 → 覆盖 → 行政区划（倒数第二）→ 轨迹（最上层，便于点选）
       airportLayer = L.layerGroup().addTo(map);
       coverageLayer = L.layerGroup().addTo(map);
-      trackLayer = L.layerGroup().addTo(map);
       districtLayer = L.layerGroup().addTo(map);
+      trackLayer = L.layerGroup().addTo(map);
       refreshLayers();
       setTimeout(() => map.invalidateSize(), 0);
     }
@@ -950,64 +1221,415 @@
         });
       }
 
+      refreshDistrictLayer();
+
       if (showTracks) {
         MAP_DATA.tracks.forEach(t => {
           if (!shouldShowTrack(t)) return;
           const latlngs = t.coords.map(c => [c[1], c[0]]);
-          const color = t.has_record ? factoryColor(t) : "#95A5A6";
-          const isSelected = selectedTrackId === t.id;
-          const dimOthers = selectedTrackId !== null && !soloTrackMode && !isSelected;
+          const style = trackLineStyle(t);
+          const popupHtml = trackPopup(t);
           const line = L.polyline(latlngs, {
-            color,
-            weight: isSelected ? 4 : 2,
-            opacity: isSelected ? 1 : (dimOthers ? 0.22 : 0.75),
-          }).bindPopup(trackPopup(t));
+            color: style.color,
+            weight: style.weight,
+            opacity: style.opacity,
+            interactive: false,
+          });
+          // 透明加宽命中层：扩大点选 / 悬停判定范围
+          const hit = L.polyline(latlngs, {
+            color: style.color,
+            weight: TRACK_HIT_WEIGHT,
+            opacity: 0,
+            fillOpacity: 0,
+            interactive: true,
+            bubblingMouseEvents: false,
+            className: "track-hit-line",
+          }).bindPopup(popupHtml);
+          bindTrackInteractions(hit, t.id);
           line.addTo(trackLayer);
-          trackPolylines.set(t.id, line);
+          hit.addTo(trackLayer);
+          trackPolylines.set(t.id, { line, hit });
+          if (style.isSelected || style.isHover) {
+            line.bringToFront();
+            hit.bringToFront();
+          }
+          const endpointStrong = style.isSelected || style.isHover;
           L.circleMarker(latlngs[0], {
-            radius: isSelected ? 6 : 4,
+            radius: 4,
             color: "#fff",
             weight: 1,
-            fillColor: color,
-            fillOpacity: dimOthers ? 0.35 : 1,
+            fillColor: style.color,
+            fillOpacity: endpointStrong ? 1 : 0.35,
           }).addTo(trackLayer);
           if (latlngs.length > 1) {
             L.circleMarker(latlngs[latlngs.length - 1], {
-              radius: isSelected ? 5 : 3,
+              radius: 3,
               color: "#fff",
               weight: 1,
-              fillColor: color,
-              fillOpacity: dimOthers ? 0.3 : 0.85,
+              fillColor: style.color,
+              fillOpacity: endpointStrong ? 0.85 : 0.3,
             }).addTo(trackLayer);
           }
         });
       }
-      refreshDistrictLayer();
+    }
+
+    function clearSeriesPosMarker() {
+      if (seriesPosMarker) {
+        seriesPosMarker.remove();
+        seriesPosMarker = null;
+      }
+    }
+
+    function seriesPointLatLng(track, dataIndex) {
+      const series = track?.series;
+      if (!series || dataIndex == null || dataIndex < 0) return null;
+      const lat = series.lat?.[dataIndex];
+      const lon = series.lon?.[dataIndex];
+      if (lat != null && lon != null && Number.isFinite(lat) && Number.isFinite(lon)) {
+        return [lat, lon];
+      }
+      const coords = track.coords;
+      if (!coords?.length || !series.t_min?.length) return null;
+      const n = series.t_min.length;
+      const ratio = n <= 1 ? 0 : dataIndex / (n - 1);
+      const ci = Math.round(ratio * (coords.length - 1));
+      const c = coords[Math.max(0, Math.min(coords.length - 1, ci))];
+      if (!c || c.length < 2) return null;
+      return [c[1], c[0]];
+    }
+
+    function showSeriesPosMarker(track, dataIndex) {
+      if (!map || !track) return;
+      const ll = seriesPointLatLng(track, dataIndex);
+      if (!ll) {
+        clearSeriesPosMarker();
+        return;
+      }
+      const series = track.series;
+      const tMin = series?.t_min?.[dataIndex];
+      const h = series?.height_m?.[dataIndex];
+      const labelBits = ["当前位置"];
+      if (tMin != null) labelBits.push(`T+${Number(tMin).toFixed(1)} min`);
+      if (h != null) labelBits.push(`${Number(h).toFixed(0)} m`);
+      const label = labelBits.join(" · ");
+      const accent = css("--accent") || "#2563EB";
+      if (seriesPosMarker) {
+        seriesPosMarker.setLatLng(ll);
+        seriesPosMarker.setStyle({ fillColor: accent });
+        seriesPosMarker.setTooltipContent(label);
+        return;
+      }
+      // circleMarker 以经纬度为圆心，避免 DivIcon 锚点偏移
+      seriesPosMarker = L.circleMarker(ll, {
+        radius: 4,
+        color: "#fff",
+        weight: 1.5,
+        fillColor: accent,
+        fillOpacity: 1,
+        opacity: 1,
+        interactive: false,
+        pane: "markerPane",
+      }).addTo(map);
+      seriesPosMarker.bindTooltip(label, {
+        permanent: true,
+        direction: "top",
+        offset: [0, -12],
+        className: "series-pos-tooltip",
+        opacity: 1,
+      });
+    }
+
+    function hideTrackSeriesPanel() {
+      const panel = document.getElementById("track-series-panel");
+      panel?.classList.remove("visible");
+      const legend = document.getElementById("track-series-legend");
+      if (legend) legend.innerHTML = "";
+      clearSeriesPosMarker();
+      seriesChartTrack = null;
+      if (trackSeriesChart) {
+        trackSeriesChart.destroy();
+        trackSeriesChart = null;
+      }
+    }
+
+    function bindTrackSeriesLegend(colors) {
+      const legend = document.getElementById("track-series-legend");
+      if (!legend || !trackSeriesChart) return;
+      const items = trackSeriesChart.data.datasets.map((ds, i) => ({
+        index: i,
+        label: ds.label,
+        color: colors[i] || ds.borderColor,
+        checked: trackSeriesChart.isDatasetVisible(i),
+      }));
+      legend.innerHTML = items.map(item => `
+        <label>
+          <input type="checkbox" data-ds="${item.index}" ${item.checked ? "checked" : ""} />
+          <span class="track-series-swatch" style="background:${item.color}"></span>
+          <span>${item.label}</span>
+        </label>
+      `).join("");
+      legend.querySelectorAll("input[type=checkbox]").forEach(input => {
+        input.addEventListener("change", () => {
+          const idx = Number(input.dataset.ds);
+          trackSeriesChart.setDatasetVisibility(idx, input.checked);
+          trackSeriesChart.update();
+        });
+      });
+    }
+
+    function renderTrackSeriesChart(track) {
+      const panel = document.getElementById("track-series-panel");
+      const titleEl = document.getElementById("track-series-title");
+      const metaEl = document.getElementById("track-series-meta");
+      const canvas = document.getElementById("chart-track-series");
+      const legend = document.getElementById("track-series-legend");
+      if (!panel || !canvas) return;
+
+      const series = track?.series;
+      titleEl.textContent = `飞行 #${track.id} · 时序曲线`;
+      const bits = [
+        track.task_name || null,
+        track.factory || null,
+        track.point_count != null ? `${track.point_count} 点` : null,
+      ].filter(Boolean);
+      metaEl.textContent = bits.join(" · ");
+
+      if (!series || !series.t_min || series.t_min.length < 2) {
+        clearSeriesPosMarker();
+        seriesChartTrack = null;
+        if (trackSeriesChart) {
+          trackSeriesChart.destroy();
+          trackSeriesChart = null;
+        }
+        if (legend) legend.innerHTML = "";
+        metaEl.textContent = (bits.length ? bits.join(" · ") + " · " : "") + "暂无时序数据";
+        panel.classList.add("visible");
+        setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+        return;
+      }
+
+      if (typeof Chart === "undefined") {
+        panel.classList.add("visible");
+        metaEl.textContent = "Chart.js 未加载，无法绘制时序图";
+        return;
+      }
+
+      seriesChartTrack = track;
+      clearSeriesPosMarker();
+      const labels = series.t_min.map(v => (v == null ? "" : Number(v).toFixed(1)));
+      // 固定高对比色（不随主题 chart-1/2/3 变化；SaaS 主题下三者原本都是蓝色）
+      const isDark = document.documentElement.dataset.theme === "linear";
+      const c1 = isDark ? "#60A5FA" : "#2563EB"; // 高度 · 蓝
+      const c2 = isDark ? "#FBBF24" : "#EA580C"; // 速度 · 橙
+      const c3 = isDark ? "#34D399" : "#059669"; // 距离 · 绿
+      const seriesColors = [c1, c2, c3];
+      const muted = css("--muted") || "#86909C";
+      const grid = isDark ? "rgba(255,255,255,0.06)" : (css("--border") || "#E5E6EB");
+      const fontFamily = "'Inter','Noto Sans SC',sans-serif";
+
+      if (trackSeriesChart) trackSeriesChart.destroy();
+      trackSeriesChart = new Chart(canvas, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "高度 (m)",
+              data: series.height_m,
+              borderColor: c1,
+              backgroundColor: "transparent",
+              fill: false,
+              borderWidth: 2,
+              pointRadius: 2,
+              pointBackgroundColor: c1,
+              tension: 0.35,
+              yAxisID: "yH",
+            },
+            {
+              label: "速度 (km/h)",
+              data: series.speed_kmh,
+              borderColor: c2,
+              backgroundColor: "transparent",
+              fill: false,
+              borderWidth: 2,
+              pointRadius: 2,
+              pointBackgroundColor: c2,
+              tension: 0.35,
+              yAxisID: "yV",
+            },
+            {
+              label: "累计距离 (km)",
+              data: series.distance_km,
+              borderColor: c3,
+              backgroundColor: "transparent",
+              fill: false,
+              borderWidth: 2,
+              pointRadius: 2,
+              pointBackgroundColor: c3,
+              tension: 0.35,
+              yAxisID: "yD",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 280 },
+          interaction: { mode: "index", intersect: false },
+          layout: { padding: { left: 4, right: 8, top: 2, bottom: 0 } },
+          onHover(_evt, elements) {
+            if (!elements?.length || !seriesChartTrack) {
+              clearSeriesPosMarker();
+              return;
+            }
+            showSeriesPosMarker(seriesChartTrack, elements[0].index);
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              titleFont: { family: fontFamily, size: 11 },
+              bodyFont: { family: fontFamily, size: 11 },
+              footerFont: { family: fontFamily, size: 10 },
+              callbacks: {
+                title(items) {
+                  const v = items?.[0]?.label;
+                  return v ? `起飞后 ${v} 分钟` : "";
+                },
+                footer(items) {
+                  const idx = items?.[0]?.dataIndex;
+                  const ll = seriesPointLatLng(seriesChartTrack, idx);
+                  if (!ll) return "";
+                  return `位置 ${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: "时间（分钟）",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: {
+                maxTicksLimit: 10,
+                maxRotation: 0,
+                color: muted,
+                font: { family: fontFamily, size: 9 },
+              },
+              grid: { color: grid },
+            },
+            yH: {
+              type: "linear",
+              position: "left",
+              title: {
+                display: true,
+                text: "高度 m",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: { color: muted, font: { family: fontFamily, size: 9 }, maxTicksLimit: 6 },
+              grid: { color: grid },
+            },
+            yV: {
+              type: "linear",
+              position: "right",
+              title: {
+                display: true,
+                text: "速度 km/h",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: { color: muted, font: { family: fontFamily, size: 9 }, maxTicksLimit: 6 },
+              grid: { drawOnChartArea: false },
+            },
+            yD: {
+              type: "linear",
+              position: "right",
+              offset: true,
+              title: {
+                display: true,
+                text: "距离 km",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: { color: muted, font: { family: fontFamily, size: 9 }, maxTicksLimit: 6 },
+              grid: { drawOnChartArea: false },
+            },
+          },
+        },
+      });
+      if (!canvas.dataset.seriesLeaveBound) {
+        canvas.dataset.seriesLeaveBound = "1";
+        canvas.addEventListener("mouseleave", clearSeriesPosMarker);
+      }
+      bindTrackSeriesLegend(seriesColors);
+      panel.classList.add("visible");
+      setTimeout(() => { if (map) map.invalidateSize(); }, 80);
     }
 
     function clearTrackSelection() {
       selectedTrackId = null;
+      hoverTrackId = null;
       soloTrackMode = false;
+      hideTrackSeriesPanel();
       refreshLayers();
       renderTrackList();
+      setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+    }
+
+    function fitTrackIntoView(line, popupLayer) {
+      if (!map || !line) return;
+      map.invalidateSize({ animate: false });
+      const bounds = line.getBounds();
+      if (!bounds.isValid()) return;
+      // 为缩放控件、弹窗注释、图例留白，避免轨迹或注释被裁切
+      map.fitBounds(bounds, {
+        paddingTopLeft: [56, 130],
+        paddingBottomRight: [56, 72],
+        maxZoom: 15,
+        animate: true,
+      });
+      if (popupLayer) {
+        popupLayer.openPopup(bounds.getCenter(), { autoPan: false });
+      }
     }
 
     function focusTrack(id) {
       selectedTrackId = id;
-      soloTrackMode = false;
+      hoverTrackId = null;
+      soloTrackMode = true;
       refreshLayers();
       renderTrackList();
 
-      const line = trackPolylines.get(id);
+      const entry = getTrackLineEntry(id);
+      const line = entry?.line;
+      const hit = entry?.hit;
       const t = MAP_DATA.tracks.find(x => x.id === id);
-      if (line) {
-        map.fitBounds(line.getBounds(), { padding: [40, 40], maxZoom: 15 });
-        line.openPopup();
-      } else if (t && t.coords.length) {
-        map.setView([t.coords[0][1], t.coords[0][0]], 14);
-      }
+
+      // 先展开时序面板并滚到地图区，再按最终视口适配
+      if (t) renderTrackSeriesChart(t);
+      else hideTrackSeriesPanel();
+      document.getElementById("section-map")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       const activeEl = document.querySelector(`.track-item[data-id="${id}"]`);
       activeEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+
+      const applyFit = () => {
+        if (line) fitTrackIntoView(line, hit || line);
+        else if (t && t.coords.length) {
+          map.invalidateSize({ animate: false });
+          map.setView([t.coords[0][1], t.coords[0][0]], 14);
+        }
+      };
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          applyFit();
+          // 二次校正：面板/图表偶发晚布局
+          setTimeout(applyFit, 160);
+        });
+      });
     }
 
     function enterSoloTrackMode() {
@@ -1017,43 +1639,39 @@
       updateTrackListMeta();
     }
 
-    function setTheme(name) {
-      document.documentElement.dataset.theme = name;
-      document.querySelectorAll(".theme-btn").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.theme === name);
+    function bindMapUi() {
+      ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
+        document.getElementById(id)?.addEventListener("change", () => {
+          updateFilterCountBadge();
+          updateFilterStatus();
+          renderTrackList();
+          refreshLayers();
+        });
       });
-      localStorage.setItem("dashboard-theme", name);
-      applyBasemap(name);
+      document.getElementById("btn-reset-view")?.addEventListener("click", fitDefaultView);
+      document.getElementById("btn-solo-track")?.addEventListener("click", enterSoloTrackMode);
+      document.getElementById("btn-clear-selection")?.addEventListener("click", clearTrackSelection);
+      document.getElementById("btn-close-series")?.addEventListener("click", () => {
+        hideTrackSeriesPanel();
+        setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+      });
+      document.getElementById("btn-reset-filters")?.addEventListener("click", resetTrackFilters);
+      document.getElementById("track-search")?.addEventListener("input", e => {
+        trackSearchQuery = e.target.value;
+        renderTrackList();
+      });
+      document.getElementById("track-sort")?.addEventListener("change", e => {
+        trackSortKey = e.target.value;
+        renderTrackList();
+      });
     }
 
-    document.querySelectorAll(".theme-btn").forEach(btn => {
-      btn.addEventListener("click", () => setTheme(btn.dataset.theme));
-    });
-
-    ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
-      document.getElementById(id).addEventListener("change", () => {
-        updateFilterCountBadge();
-        updateFilterStatus();
-        renderTrackList();
-        refreshLayers();
-      });
-    });
-    document.getElementById("btn-reset-view").addEventListener("click", fitDefaultView);
-    document.getElementById("btn-solo-track")?.addEventListener("click", enterSoloTrackMode);
-    document.getElementById("btn-clear-selection")?.addEventListener("click", clearTrackSelection);
-    document.getElementById("btn-reset-filters")?.addEventListener("click", resetTrackFilters);
-    document.getElementById("track-search")?.addEventListener("input", e => {
-      trackSearchQuery = e.target.value;
-      renderTrackList();
-    });
-    document.getElementById("track-sort")?.addEventListener("change", e => {
-      trackSortKey = e.target.value;
-      renderTrackList();
-    });
-
     const savedTheme = localStorage.getItem("dashboard-theme");
-    if (savedTheme) setTheme(savedTheme);
+    if (savedTheme) {
+      document.documentElement.dataset.theme = savedTheme;
+    }
 
+    bindMapUi();
     fetch("map_data.json")
       .then(r => {
         if (!r.ok) throw new Error("无法读取 map_data.json，请先运行 build_dashboard.py");
@@ -1062,10 +1680,9 @@
       .then(json => {
         if (!json) throw new Error("无可用地图数据");
         MAP_DATA = json;
-        document.getElementById("meta-range").textContent =
-          `时间范围：${json.meta.date_range.start} ~ ${json.meta.date_range.end}`;
-        document.getElementById("meta-range").style.color = "";
-        renderKPIs();
+        setMapStatus(
+          `时间范围：${json.meta.date_range.start} ~ ${json.meta.date_range.end}`,
+        );
         renderFactoryFilters();
         updateFilterStatus();
         renderTrackList();
@@ -1075,8 +1692,7 @@
         initMap();
       })
       .catch(err => {
-        document.getElementById("meta-range").textContent = "数据加载失败：" + err.message;
-        document.getElementById("meta-range").style.color = "var(--negative, #F53F3F)";
+        setMapStatus("数据加载失败：" + err.message, true);
         console.error(err);
       });
   </script>

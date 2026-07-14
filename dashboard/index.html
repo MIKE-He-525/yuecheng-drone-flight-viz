@@ -104,32 +104,7 @@
     .chart-wrap.compact { height: 170px; }
     .chart-wrap.tasks { height: 240px; }
     .span-2 { grid-column: span 2; }
-    .map-entry-card {
-      display: flex; align-items: stretch; justify-content: center;
-      min-height: 190px; padding: 0; overflow: hidden;
-      background: linear-gradient(135deg, var(--accent-soft) 0%, var(--surface) 55%);
-    }
-    .map-entry-inner {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      text-align: center; padding: 14px 12px; width: 100%; gap: 6px;
-    }
-    .map-entry-icon { font-size: 1.75rem; line-height: 1; opacity: 0.9; }
-    .map-entry-card h3 { font-size: 0.85rem; font-weight: 600; color: var(--heading); margin: 0; }
-    .map-entry-card p { font-size: 0.68rem; color: var(--muted); line-height: 1.35; margin: 0; }
-    .map-entry-btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      margin-top: 4px; padding: 7px 14px;
-      background: var(--accent); color: var(--accent-text);
-      border: none; border-radius: var(--radius-sm);
-      font-size: 0.75rem; font-weight: 600;
-      text-decoration: none; cursor: pointer;
-      transition: transform 0.15s, opacity 0.15s;
-    }
-    .map-entry-btn:hover { opacity: 0.92; transform: translateY(-1px); }
-    footer {
-      margin-top: 10px; text-align: center;
-      font-size: 0.68rem; color: var(--muted);
-    }
+    .span-all { grid-column: 1 / -1; }
 
     /* ── 1. Claude · 暖调人文复古 ── */
     [data-theme="claude"] {
@@ -287,17 +262,9 @@
         <h3>飞行时长分布（≤60 分钟）</h3>
         <div class="chart-wrap compact"><canvas id="chart-duration"></canvas></div>
       </div>
-      <div class="card chart-card span-2">
+      <div class="card chart-card span-all">
         <h3>任务飞行 Top 8</h3>
         <div class="chart-wrap tasks"><canvas id="chart-tasks"></canvas></div>
-      </div>
-      <div class="card map-entry-card">
-        <div class="map-entry-inner">
-          <div class="map-entry-icon">🗺</div>
-          <h3>空间地图可视化</h3>
-          <p id="map-entry-desc">机场 · 轨迹 · 覆盖范围 · 航线距离</p>
-          <a class="map-entry-btn" href="dashboard.html">进入地图 →</a>
-        </div>
       </div>
     </section>
   </div>
@@ -541,11 +508,6 @@
         document.getElementById("meta-range").textContent =
           `时间范围：${json.meta.date_range.start} ~ ${json.meta.date_range.end}`;
         document.getElementById("meta-range").style.color = "";
-        const mapDesc = document.getElementById("map-entry-desc");
-        if (mapDesc && json.kpis) {
-          mapDesc.textContent =
-            `${json.kpis.airports} 个机场 · ${json.kpis.tracks_with_telemetry || "—"} 条轨迹 · 覆盖范围 · 航线距离`;
-        }
         renderKPIs();
         applyLinearBorder();
         if (typeof Chart === "undefined") {
