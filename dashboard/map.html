@@ -1,0 +1,4572 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="saas">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>空间地图 · 越城区无人机飞行服务</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style data-scope="map-standalone">
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; transition: background 0.35s, color 0.35s;
+    }
+    [data-theme="claude"] {
+      --bg: #F4F1EA; --surface: #FAF9F5; --heading: #191919; --text: #191919;
+      --muted: #B1ADA1; --border: #E0DDD4; --accent: #C15F3C; --accent-text: #FAF9F5;
+      --accent-soft: rgba(193, 95, 60, 0.12); --shadow: 0 2px 12px rgba(25,25,25,0.06);
+      --radius: 10px; --radius-sm: 8px;
+    }
+    [data-theme="material"] {
+      --bg: #F8F9FA; --surface: #FFFFFF; --heading: #202124; --text: #202124;
+      --muted: #5F6368; --border: #E8EAED; --accent: #1A73E8; --accent-text: #FFFFFF;
+      --accent-soft: rgba(26,115,232,0.10); --shadow: 0 2px 12px rgba(26,115,232,0.08);
+      --radius: 16px; --radius-sm: 12px;
+    }
+    [data-theme="vercel"] {
+      --bg: #FFFFFF; --surface: #FAFAFA; --heading: #171717; --text: #171717;
+      --muted: #666; --border: #EBEBEB; --accent: #171717; --accent-text: #FFFFFF;
+      --accent-soft: #F5F5F5; --shadow: none; --radius: 6px; --radius-sm: 4px;
+    }
+    [data-theme="linear"] {
+      --bg: #121316; --surface: #1C1D20; --heading: #F4F5F8; --text: #E8E9ED;
+      --muted: #8A8F98; --border: rgba(255,255,255,0.06); --accent: #5E6AD2; --accent-text: #FFF;
+      --accent-soft: rgba(94,106,210,0.15); --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --radius: 12px; --radius-sm: 8px;
+    }
+    [data-theme="saas"] {
+      --bg: #F5F7FA; --surface: #FFFFFF; --heading: #1D2129; --text: #4E5969;
+      --muted: #86909C; --border: #E5E6EB; --accent: #165DFF; --accent-text: #FFFFFF;
+      --accent-soft: rgba(22,93,255,0.08); --shadow: 0 2px 8px rgba(0,0,0,0.06);
+      --radius: 10px; --radius-sm: 8px;
+    }
+  </style>
+  <link rel="stylesheet" href="map_section.css" data-scope="map-section" />
+</head>
+<body>
+  <!-- map.html：空间地图区块模板。样式见 map_section.css；数据来自 map_data.json（本页 fetch），或由 build_dashboard.py 内嵌注入 dashboard。 -->
+  <section id="section-map" class="map-section">
+    <div class="map-section-header">
+      <div class="map-section-header-main">
+        <h2>空间地图</h2>
+        <p class="sub" id="map-status">加载中…</p>
+      </div>
+      <p class="map-term-note" role="note">
+        <strong>数据说明：</strong>橙线为行政区划（统计用），<strong>≠</strong>法定空域/管制空域；
+        「行政区内轨迹」按点占比 ≥50% 筛选，不代表可飞或已获许可。
+      </p>
+    </div>
+  <div class="layout">
+    <aside class="track-rail">
+      <div class="track-rail-filters">
+        <div class="panel panel-filters">
+          <h3>轨迹筛选 <span class="filter-count-badge" id="filter-count-badge">—</span></h3>
+
+          <div class="filter-section">
+            <div class="filter-label">厂商</div>
+            <div class="filter-row" id="factory-filters"></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">任务类型</div>
+            <div class="filter-row" id="flytype-filters"></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>起飞时间</span>
+              <span class="range-values" id="filter-date-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-date-fill"></div></div>
+              <input type="range" id="filter-date-min" class="range-min" />
+              <input type="range" id="filter-date-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>飞行时长（分钟）</span>
+              <span class="range-values" id="filter-duration-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-duration-fill"></div></div>
+              <input type="range" id="filter-duration-min" class="range-min" />
+              <input type="range" id="filter-duration-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>飞行距离（km）</span>
+              <span class="range-values" id="filter-distance-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-distance-fill"></div></div>
+              <input type="range" id="filter-distance-min" class="range-min" />
+              <input type="range" id="filter-distance-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>飞行轨迹最大高度（m）</span>
+              <span class="range-values" id="filter-height-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-height-fill"></div></div>
+              <input type="range" id="filter-height-min" class="range-min" />
+              <input type="range" id="filter-height-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">
+              <span>飞行最大速度（km/h）</span>
+              <span class="range-values" id="filter-speed-values">—</span>
+            </div>
+            <div class="dual-range">
+              <div class="range-track"><div class="range-fill" id="filter-speed-fill"></div></div>
+              <input type="range" id="filter-speed-min" class="range-min" />
+              <input type="range" id="filter-speed-max" class="range-max" />
+            </div>
+          </div>
+
+          <div class="filter-actions">
+            <button type="button" id="btn-reset-filters" class="primary">重置筛选</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-status" id="filter-status">
+        <span id="filter-status-text">调整筛选条件以缩小结果集</span>
+        <div class="filter-status-chips" id="filter-status-chips"></div>
+      </div>
+
+      <div class="track-list-section">
+        <div class="track-rail-header">
+          <h2>筛选结果 <span class="filter-count-badge" id="list-count-badge">—</span></h2>
+          <p id="track-list-meta">点击选中 · 可加入对比</p>
+          <div class="track-actions">
+            <button type="button" class="filter-btn" id="btn-show-series">显示时序图</button>
+            <button type="button" class="filter-btn" id="btn-solo-track">仅看此条</button>
+            <button type="button" class="filter-btn" id="btn-add-compare">加入对比</button>
+            <button type="button" class="filter-btn" id="btn-exit-compare">退出对比</button>
+            <button type="button" class="filter-btn" id="btn-clear-selection">取消选中</button>
+          </div>
+        </div>
+        <div class="list-toolbar">
+          <input type="search" id="track-search" placeholder="搜索 ID / 任务名 / 机场 / 机库SN / 任务ID / 无人机SN" />
+          <select id="track-sort" title="排序">
+            <option value="points">点数</option>
+            <option value="duration">时长</option>
+            <option value="distance">距离</option>
+          </select>
+        </div>
+        <div class="track-list" id="track-list"></div>
+      </div>
+    </aside>
+
+    <div class="map-column">
+      <div class="layer-bar" role="toolbar" aria-label="图层控制">
+        <span class="layer-bar-title">图层控制</span>
+        <div class="layer-list">
+          <label><input type="checkbox" id="layer-airports" /> 机场点位（全部）</label>
+          <label><input type="checkbox" id="layer-coverage" /> 机场覆盖半径</label>
+          <label><input type="checkbox" id="layer-tracks" checked /> 飞行轨迹</label>
+          <label><input type="checkbox" id="layer-district" checked /> 显示越城区行政区划</label>
+          <label><input type="checkbox" id="layer-region-only" /> 仅显示行政区内轨迹</label>
+          <label><input type="checkbox" id="layer-view-3d" /> 3D 视图</label>
+          <label><input type="checkbox" id="layer-terrain" checked /> 地形</label>
+          <label><input type="checkbox" id="layer-buildings-3d" checked /> 立体建筑</label>
+        </div>
+        <button type="button" class="filter-btn" id="btn-reset-view">重置默认视野</button>
+      </div>
+      <main class="map-wrap">
+        <div id="map"></div>
+        <div id="map3d" aria-hidden="true"></div>
+        <aside id="map3d-track-info" class="map3d-track-info" hidden aria-live="polite">
+          <strong id="map3d-track-info-title" class="map3d-track-info-title">轨迹详情</strong>
+          <dl id="map3d-track-info-body" class="map3d-track-info-body"></dl>
+          <p id="map3d-track-info-hint" class="map3d-track-info-hint" hidden></p>
+        </aside>
+        <p id="map3d-hint" class="map3d-hint" hidden role="status"></p>
+        <div class="map-legend">
+          <strong style="font-size:0.72rem;color:var(--heading)">图例</strong>
+          <div><span class="dot" style="background:#E74C3C"></span>大疆机场/轨迹</div>
+          <div><span class="dot" style="background:#3498DB"></span>一电机场/轨迹</div>
+          <div><span class="dot" style="background:#2ECC71"></span>纵横机场/轨迹</div>
+          <div><span class="line-sample" style="background:transparent;border:2px solid #E67E22;height:0"></span>越城区行政区划</div>
+          <div><span class="line-sample" style="background:#95A5A6"></span>无记录关联轨迹</div>
+        </div>
+      </main>
+      <div id="track-series-panel" class="track-series-panel" aria-live="polite" aria-hidden="true">
+        <button type="button" class="series-drawer-toggle" id="btn-toggle-series" aria-expanded="false" aria-controls="track-series-drawer-body" title="展开时序图">
+          <span class="series-drawer-chevron" aria-hidden="true"></span>
+        </button>
+        <div id="track-series-drawer-body" class="track-series-drawer-body">
+          <div class="track-series-header">
+            <div class="header-left">
+              <h3 id="track-series-title">轨迹时序</h3>
+              <span class="series-meta" id="track-series-meta"></span>
+            </div>
+            <div class="series-metric-toggles" id="series-metric-toggles" hidden>
+              <button type="button" class="filter-btn active" data-metric="height">高度</button>
+              <button type="button" class="filter-btn" data-metric="speed">速度</button>
+              <button type="button" class="filter-btn" data-metric="distance">距离</button>
+            </div>
+          </div>
+          <div class="track-series-body">
+            <aside class="track-series-legend panel">
+              <div class="series-play-bar" id="series-play-bar" hidden>
+                <button type="button" class="series-play-btn" id="btn-series-play" aria-label="播放">播放</button>
+                <button type="button" class="series-play-btn" id="btn-series-pause" aria-label="暂停" hidden>暂停</button>
+                <label class="series-play-rate-label">
+                  倍速
+                  <select id="series-play-rate" aria-label="播放倍速">
+                    <option value="1">1×</option>
+                    <option value="3" selected>3×</option>
+                    <option value="10">10×</option>
+                    <option value="30">30×</option>
+                  </select>
+                </label>
+                <span class="series-play-time" id="series-play-time">T+0.0 / 0.0 min</span>
+              </div>
+              <h3>图例</h3>
+              <div class="layer-list" id="track-series-legend"></div>
+            </aside>
+            <div class="track-series-chart">
+              <canvas id="chart-track-series"></canvas>
+              <div class="series-play-cursor" id="series-play-cursor" hidden></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </section>
+
+  <script>
+    /* ========================================================================
+     * 全局状态与常量（筛选、选中、3D 开关、seriesPlay 等）
+     * ======================================================================== */
+    const FACTORY_COLORS = { "大疆": "#E74C3C", "DJ": "#E74C3C", "一电": "#3498DB", "YD": "#3498DB", "纵横": "#2ECC71", "ZH": "#2ECC71", "未知": "#95A5A6" };
+
+    let MAP_DATA = null;
+    let map = null;
+    let basemapLayer = null;
+    let airportLayer = null;
+    let coverageLayer = null;
+    let trackLayer = null;
+    let districtLayer = null;
+    let trackPolylines = new Map(); // id -> { line, hit }
+    const TRACK_HIT_WEIGHT = 18; // 透明命中层线宽，扩大点选/悬停判定范围
+    const COMPARE_MAX = 2;
+    const COMPARE_PALETTE = ["#E74C3C", "#3498DB", "#2ECC71", "#F39C12"];
+    let selectedTrackId = null;
+    let hoverTrackId = null;
+    let soloTrackMode = false;
+    /** 已点「加入对比」，等待点第二条对比轨。 */
+    let comparePickMode = false;
+    let compareActive = false;
+    let compareTrackIds = [];
+    let compareMetric = "height"; // height | speed | distance
+    let seriesPosExtraMarkers = new Map(); // trackId -> Leaflet marker（对比副轨 2D）
+    let seriesPosExtra3dPins = []; // { trackId, el, state } 对比副轨 3D HTML 圆点
+    let trackSearchQuery = "";
+    let trackSortKey = "points";
+    let filterBounds = null;
+    let rangeFiltersBound = false;
+    let filterApplyTimer = null;
+    let trackSeriesChart = null;
+    let seriesChartTrack = null;
+    let seriesPlay = {
+      playing: false,
+      rate: 3,
+      tCursor: 0,
+      index: 0,
+      frac: 0,
+      raf: 0,
+      lastTs: 0,
+      lastTipIdx: -1,
+      cursorVisible: false,
+    };
+    let seriesPosMarker = null;
+    let seriesPos3dEl = null;
+    let seriesPos3dState = null; // { lng, lat, alt, label, accent }
+    let map3d = null;
+    let map3dReady = false;
+    let in3dMode = false;
+    /** 全局偏好：选轨不重置；仅图层开关可改。 */
+    let prefer3dView = false;
+    let preferTerrain = true;
+    let map3dTrackId = null;
+    let map3dPopup = null;
+    let map3dHoverFeatureId = null;
+    let map3dInteractBound = false;
+    let selectedTrack3dLineLayer = null;
+    const MAP3D_DEFAULT_HEIGHT = 120;
+    let trackFilters = {
+      factory: "all",
+      flyType: "all",
+      dateMin: null,
+      dateMax: null,
+      durationMin: null,
+      durationMax: null,
+      distanceMin: null,
+      distanceMax: null,
+      heightMin: null,
+      heightMax: null,
+      speedMin: null,
+      speedMax: null,
+    };
+
+    const BASEMAPS = {
+      light: {
+        url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      },
+      dark: {
+        url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      },
+    };
+
+    /* ========================================================================
+     * Leaflet 2D（图层刷新、轨迹命中、筛选/列表）
+     * ======================================================================== */
+
+    function applyBasemap(theme) {
+      if (!map) return;
+      const cfg = theme === "linear" ? BASEMAPS.dark : BASEMAPS.light;
+      if (basemapLayer) map.removeLayer(basemapLayer);
+      basemapLayer = L.tileLayer(cfg.url, {
+        maxZoom: 20,
+        subdomains: "abcd",
+        attribution: cfg.attribution,
+      }).addTo(map);
+      applyMap3dBasemap(theme);
+    }
+
+    /* ========================================================================
+     * MapLibre 3D（DEM+AGL、WebGL 细管、叠层、地形/建筑）
+     * ======================================================================== */
+    const MAP3D_TERRAIN_EXAGGERATION = 1.0;
+
+    function map3dStyleForTheme(theme) {
+      const path = theme === "linear" ? "dark_all" : "light_all";
+      return {
+        version: 8,
+        sources: {
+          carto: {
+            type: "raster",
+            tiles: [
+              `https://a.basemaps.cartocdn.com/${path}/{z}/{x}/{y}.png`,
+              `https://b.basemaps.cartocdn.com/${path}/{z}/{x}/{y}.png`,
+              `https://c.basemaps.cartocdn.com/${path}/{z}/{x}/{y}.png`,
+              `https://d.basemaps.cartocdn.com/${path}/{z}/{x}/{y}.png`,
+            ],
+            tileSize: 256,
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          },
+          "terrain-dem": {
+            type: "raster-dem",
+            tiles: [
+              "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+            ],
+            tileSize: 256,
+            maxzoom: 15,
+            encoding: "terrarium",
+            attribution: "Terrain © Mapzen / AWS Open Data",
+          },
+        },
+        layers: [{ id: "carto", type: "raster", source: "carto" }],
+        terrain: { source: "terrain-dem", exaggeration: MAP3D_TERRAIN_EXAGGERATION },
+      };
+    }
+
+    /** 启用地形起伏 + 山影 + 天空，让底图本身呈 3D。 */
+    function ensureMap3dTerrain() {
+      if (!map3d || typeof maplibregl === "undefined") return;
+      if (!map3d.getSource("terrain-dem")) {
+        map3d.addSource("terrain-dem", {
+          type: "raster-dem",
+          tiles: [
+            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+          ],
+          tileSize: 256,
+          maxzoom: 15,
+          encoding: "terrarium",
+          attribution: "Terrain © Mapzen / AWS Open Data",
+        });
+      }
+      const beforeId = map3d.getLayer("district-3d-fill")
+        ? "district-3d-fill"
+        : map3d.getLayer("coverage-3d-fill")
+          ? "coverage-3d-fill"
+          : map3d.getLayer("tracks-3d-line")
+            ? "tracks-3d-line"
+            : undefined;
+      if (!map3d.getLayer("terrain-hillshade")) {
+        const layer = {
+          id: "terrain-hillshade",
+          type: "hillshade",
+          source: "terrain-dem",
+          paint: {
+            "hillshade-exaggeration": 0.5,
+            "hillshade-shadow-color": "#1a1a1a",
+            "hillshade-highlight-color": "#ffffff",
+            "hillshade-accent-color": "#6b6b6b",
+          },
+        };
+        if (beforeId) map3d.addLayer(layer, beforeId);
+        else map3d.addLayer(layer);
+      }
+      setMap3dLayerVisible("terrain-hillshade", preferTerrain);
+      if (typeof map3d.setTerrain === "function") {
+        if (preferTerrain) {
+          map3d.setTerrain({
+            source: "terrain-dem",
+            exaggeration: MAP3D_TERRAIN_EXAGGERATION,
+          });
+        } else {
+          map3d.setTerrain(null);
+        }
+      }
+      if (typeof map3d.setSky === "function") {
+        const dark = document.documentElement.dataset.theme === "linear";
+        map3d.setSky(
+          dark
+            ? {
+                "sky-color": "#0b1220",
+                "sky-horizon-blend": 0.5,
+                "horizon-color": "#1a2332",
+                "horizon-fog-blend": 0.6,
+                "fog-color": "#121820",
+                "fog-ground-blend": 0.35,
+              }
+            : {
+                "sky-color": "#87c4f0",
+                "sky-horizon-blend": 0.55,
+                "horizon-color": "#e8f2fa",
+                "horizon-fog-blend": 0.65,
+                "fog-color": "#dce8f2",
+                "fog-ground-blend": 0.4,
+              }
+        );
+      }
+    }
+
+    /** OpenFreeMap 矢量建筑挤出（minzoom 13）；叠在底图之上、区划/航迹之下。 */
+    function ensureMap3dBuildings() {
+      if (!map3d || typeof maplibregl === "undefined") return;
+      if (!map3d.getSource("openfreemap")) {
+        map3d.addSource("openfreemap", {
+          type: "vector",
+          url: "https://tiles.openfreemap.org/planet",
+          attribution:
+            '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://openfreemap.org/">OpenFreeMap</a>',
+        });
+      }
+      const dark = document.documentElement.dataset.theme === "linear";
+      // 对比度要够：浅灰贴在 CARTO 上几乎看不见
+      const color = dark ? "#8b9bb4" : "#6b7280";
+      const opacity = dark ? 0.75 : 0.85;
+      const beforeId = map3d.getLayer("district-3d-fill")
+        ? "district-3d-fill"
+        : (map3d.getLayer("selected-track-3d-line") ? "selected-track-3d-line" : undefined);
+
+      // 无高度标注时给默认 12 m，避免整片建筑挤出高度为 0
+      const heightExpr = [
+        "case",
+        [">", ["to-number", ["coalesce", ["get", "render_height"], 0]], 0],
+        ["to-number", ["get", "render_height"]],
+        12,
+      ];
+      const baseExpr = [
+        "case",
+        [">", ["to-number", ["coalesce", ["get", "render_min_height"], 0]], 0],
+        ["to-number", ["get", "render_min_height"]],
+        0,
+      ];
+
+      if (!map3d.getLayer("buildings-3d")) {
+        const layer = {
+          id: "buildings-3d",
+          source: "openfreemap",
+          "source-layer": "building",
+          type: "fill-extrusion",
+          minzoom: 13,
+          filter: ["!=", ["get", "hide_3d"], true],
+          paint: {
+            "fill-extrusion-color": color,
+            "fill-extrusion-opacity": opacity,
+            // 不再用 zoom 插值把高度压到 0（选中轨 fitBounds 常停在 14~15）
+            "fill-extrusion-height": heightExpr,
+            "fill-extrusion-base": baseExpr,
+          },
+        };
+        if (beforeId) map3d.addLayer(layer, beforeId);
+        else map3d.addLayer(layer);
+      } else {
+        map3d.setPaintProperty("buildings-3d", "fill-extrusion-color", color);
+        map3d.setPaintProperty("buildings-3d", "fill-extrusion-opacity", opacity);
+        map3d.setPaintProperty("buildings-3d", "fill-extrusion-height", heightExpr);
+        map3d.setPaintProperty("buildings-3d", "fill-extrusion-base", baseExpr);
+      }
+      syncMap3dBuildingsVisibility();
+    }
+
+    function syncMap3dBuildingsVisibility() {
+      const show = !!document.getElementById("layer-buildings-3d")?.checked;
+      setMap3dLayerVisible("buildings-3d", show);
+    }
+
+    function applyMap3dBasemap(theme) {
+      if (!map3d) return;
+      const path = theme === "linear" ? "dark_all" : "light_all";
+      const tiles = ["a", "b", "c", "d"].map(
+        (s) => `https://${s}.basemaps.cartocdn.com/${path}/{z}/{x}/{y}.png`,
+      );
+      const src = map3d.getSource("carto");
+      if (src && typeof src.setTiles === "function") {
+        src.setTiles(tiles);
+        ensureMap3dTerrain();
+        ensureMap3dBuildings();
+        return;
+      }
+      // 样式未就绪或 source 被清掉时整页换肤
+      map3d.setStyle(map3dStyleForTheme(theme));
+      map3d.once("style.load", () => {
+        map3dReady = true;
+        selectedTrack3dLineLayer = null;
+        ensureMap3dLayers();
+        ensureSeriesPos3dLayers();
+        ensureMap3dTerrain();
+        ensureMap3dBuildings();
+        bindMap3dTerrainRebuild();
+        setupMap3dInteractions(map3d);
+        syncMap3dOverlays();
+        if (map3dPendingTrack) {
+          updateMap3dGeometry(map3dPendingTrack);
+        } else if (map3dTrackId != null && MAP_DATA) {
+          const t = MAP_DATA.tracks.find((x) => x.id === map3dTrackId);
+          if (t) updateMap3dGeometry(t);
+        }
+      });
+    }
+
+    /** 全高度为 0/null → 3D 示意抬升；图表/弹窗仍用原始 height。 */
+    function displayHeightsFor3d(series) {
+      const raw = series?.height_m;
+      if (!raw?.length) return { heights: [], usedDefault120: false };
+      const allZeroOrNull = raw.every((h) => h == null || Number(h) === 0);
+      if (allZeroOrNull) {
+        return {
+          heights: raw.map(() => MAP3D_DEFAULT_HEIGHT),
+          usedDefault120: true,
+        };
+      }
+      return {
+        heights: raw.map((h) => (h == null || !Number.isFinite(Number(h)) ? 0 : Number(h))),
+        usedDefault120: false,
+      };
+    }
+
+    /** 查询 DEM 海拔（含地形夸张，与建筑 fill-extrusion 同一套）。 */
+    function queryMap3dTerrainElevation(lng, lat) {
+      if (!map3d || typeof map3d.queryTerrainElevation !== "function") return null;
+      try {
+        const v = map3d.queryTerrainElevation(
+          { lng, lat },
+          { exaggerated: true }
+        );
+        return v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    /**
+     * 3D 垂直坐标：DEM（含地形夸张）+ AGL，与建筑 fill-extrusion 同口径。
+     * 口径：elevation_m 优先作 AGL（−5～800 m）；否则 max(0, height_m − DEM)；
+     *       usedDefault120 时 AGL 固定 120 m；无 DEM 时退回海拔 height_m 避免整条贴地。
+     * 副作用：只读 map3d.queryTerrainElevation，不改 DOM/图层。
+     */
+    function absoluteAltitudeFor3d(lon, lat, heightM, elevationM, usedDefault120) {
+      const dem = queryMap3dTerrainElevation(lon, lat);
+      let agl = null;
+      if (usedDefault120) {
+        agl = MAP3D_DEFAULT_HEIGHT;
+      } else if (elevationM != null && Number.isFinite(Number(elevationM))) {
+        const e = Number(elevationM);
+        if (e >= -5 && e <= 800) agl = Math.max(0, e);
+      }
+      if (agl == null) {
+        if (heightM != null && Number.isFinite(Number(heightM))) {
+          const h = Math.max(0, Number(heightM));
+          if (dem != null) agl = Math.max(0, h - dem);
+          else return h; // 无 DEM：退回海拔，避免整条贴地
+        } else {
+          agl = 0;
+        }
+      }
+      return dem != null ? dem + agl : agl;
+    }
+
+    function bindMap3dTerrainRebuild() {
+      if (!map3d || map3d.__terrainRebuildBound) return;
+      map3d.__terrainRebuildBound = true;
+      let timer = null;
+      const rebuild = () => {
+        if (!in3dMode || map3dTrackId == null || !MAP_DATA) return;
+        const t = MAP_DATA.tracks.find((x) => x.id === map3dTrackId);
+        if (t) updateMap3dGeometry(t);
+      };
+      map3d.on("sourcedata", (e) => {
+        if (e?.sourceId !== "terrain-dem" || !e.isSourceLoaded) return;
+        clearTimeout(timer);
+        timer = setTimeout(rebuild, 120);
+      });
+    }
+
+    /**
+     * 由选中轨 series 构建 3D 细管线点列（经 densifyTrack3dPoints 加密）。
+     * 口径：lon/lat/height 取自 series；绝对高度经 absoluteAltitudeFor3d。
+     * 返回 { points, color, usedDefault120, path }；有效点不足 2 个则 null。
+     * 副作用：无；不写 map3d（由 updateMap3dGeometry → setTrack 消费）。
+     */
+    function buildSelectedTrack3dLine(track) {
+      const series = track?.series;
+      if (!series?.lon?.length || !series?.lat?.length) return null;
+      const { heights, usedDefault120 } = displayHeightsFor3d(series);
+      const n = Math.min(series.lon.length, series.lat.length, heights.length);
+      if (n < 2) return null;
+      const color = darkenHex(factoryColor(track), 0.55);
+      const rawPts = [];
+      const path = [];
+      for (let i = 0; i < n; i++) {
+        const lon = series.lon[i];
+        const lat = series.lat[i];
+        if (lon == null || lat == null || !Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+        const heightM = Number(heights[i]);
+        const elevM = series.elevation_m?.[i];
+        const h = absoluteAltitudeFor3d(
+          lon,
+          lat,
+          Number.isFinite(heightM) ? heightM : 0,
+          elevM,
+          usedDefault120
+        );
+        rawPts.push({ lon, lat, h: Number.isFinite(h) ? h : 0 });
+        path.push([lon, lat]);
+      }
+      if (rawPts.length < 2) return null;
+      const pts = densifyTrack3dPoints(rawPts);
+      return { points: pts, color, usedDefault120, path };
+    }
+
+    /** 真正的 3D 细线（自定义 WebGL 层）；点列经 Chaikin + Catmull-Rom 加密。 */
+    const MAP3D_LINE_HALF_WIDTH_M = 1.4;
+    const MAP3D_DENSE_STEP_M = 8;
+    const MAP3D_DENSE_MAX_SUB = 16;
+    const MAP3D_DENSE_MIN_SUB = 4;
+    // Chaikin 会偏离采样点，标点会「飘」离航迹；仅用 Catmull-Rom 保证过采样点
+    const MAP3D_CHAIKIN_ITERS = 0;
+
+    function segmentLengthM(a, b) {
+      const midLat = (a.lat + b.lat) / 2;
+      const cosLat = Math.cos((midLat * Math.PI) / 180) || 1e-6;
+      const dxM = (b.lon - a.lon) * 111320 * cosLat;
+      const dyM = (b.lat - a.lat) * 111320;
+      const dz = (b.h - a.h);
+      return Math.hypot(dxM, dyM, dz);
+    }
+
+    function lerpTrackPt(a, b, t) {
+      return {
+        lon: a.lon + (b.lon - a.lon) * t,
+        lat: a.lat + (b.lat - a.lat) * t,
+        h: Math.max(0, a.h + (b.h - a.h) * t),
+      };
+    }
+
+    /** Chaikin 角切：先抹圆折线拐角。 */
+    function chaikinSmoothTrack(points, iterations) {
+      let pts = points;
+      for (let iter = 0; iter < iterations; iter++) {
+        if (pts.length < 2) break;
+        const next = [pts[0]];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i];
+          const b = pts[i + 1];
+          next.push(lerpTrackPt(a, b, 0.25));
+          next.push(lerpTrackPt(a, b, 0.75));
+        }
+        next.push(pts[pts.length - 1]);
+        pts = next;
+      }
+      return pts;
+    }
+
+    /**
+     * 航迹点弦上线性加密 lon/lat/h（步长约 MAP3D_DENSE_STEP_M）。
+     * 口径：Chaikin 迭代为 0，保证过原采样点；与 seriesInterpAtTime 插值一致，
+     *       避免曲线弯出弦外导致 3D 标点飘离航迹。
+     * 副作用：无。
+     */
+    function densifyTrack3dPoints(points) {
+      if (!points || points.length < 2) return points || [];
+      const smoothed = chaikinSmoothTrack(points, MAP3D_CHAIKIN_ITERS);
+      const out = [];
+      for (let i = 0; i < smoothed.length - 1; i++) {
+        const p1 = smoothed[i];
+        const p2 = smoothed[i + 1];
+        out.push(p1);
+        const lenM = segmentLengthM(p1, p2);
+        if (lenM < 0.8) continue;
+        const subdiv = Math.max(
+          MAP3D_DENSE_MIN_SUB,
+          Math.min(MAP3D_DENSE_MAX_SUB, Math.ceil(lenM / MAP3D_DENSE_STEP_M))
+        );
+        for (let s = 1; s < subdiv; s++) {
+          out.push(lerpTrackPt(p1, p2, s / subdiv));
+        }
+      }
+      out.push(smoothed[smoothed.length - 1]);
+      return out;
+    }
+
+    function hexToRgba01(hex, alpha = 1) {
+      const m = String(hex || "").trim().match(/^#?([0-9a-f]{6})$/i);
+      if (!m) return [0.15, 0.35, 0.85, alpha];
+      const n = parseInt(m[1], 16);
+      return [
+        ((n >> 16) & 255) / 255,
+        ((n >> 8) & 255) / 255,
+        (n & 255) / 255,
+        alpha,
+      ];
+    }
+
+    /** MapLibre 自定义层：墨卡托 + 海拔下的方形截面细管，避免 fill-extrusion 断带伪影。 */
+    function createSelectedTrack3dLineLayer() {
+      const layer = {
+        id: "selected-track-3d-line",
+        type: "custom",
+        renderingMode: "3d",
+        visible: true,
+        _vertexCount: 0,
+        _color: [0.2, 0.35, 0.85, 1],
+        onAdd(map, gl) {
+          this.map = map;
+          this.gl = gl;
+          try {
+            gl.getExtension("OES_element_index_uint");
+          } catch (_) { /* ignore */ }
+          const vs = `
+            uniform mat4 u_matrix;
+            attribute vec3 a_pos;
+            void main() {
+              gl_Position = u_matrix * vec4(a_pos, 1.0);
+            }`;
+          const fs = `
+            precision mediump float;
+            uniform vec4 u_color;
+            void main() {
+              gl_FragColor = u_color;
+            }`;
+          const compile = (type, src) => {
+            const sh = gl.createShader(type);
+            gl.shaderSource(sh, src);
+            gl.compileShader(sh);
+            return sh;
+          };
+          this.program = gl.createProgram();
+          gl.attachShader(this.program, compile(gl.VERTEX_SHADER, vs));
+          gl.attachShader(this.program, compile(gl.FRAGMENT_SHADER, fs));
+          gl.linkProgram(this.program);
+          this.aPos = gl.getAttribLocation(this.program, "a_pos");
+          this.uMatrix = gl.getUniformLocation(this.program, "u_matrix");
+          this.uColor = gl.getUniformLocation(this.program, "u_color");
+          this.buffer = gl.createBuffer();
+          this.indexBuffer = gl.createBuffer();
+          this.hoverBuffer = gl.createBuffer();
+          this.hoverIndexBuffer = gl.createBuffer();
+          this._hoverVertexCount = 0;
+        },
+        onRemove(_map, gl) {
+          if (this._meshes?.length) {
+            for (const m of this._meshes) {
+              if (m.buffer) gl.deleteBuffer(m.buffer);
+              if (m.indexBuffer) gl.deleteBuffer(m.indexBuffer);
+            }
+            this._meshes = [];
+          }
+          if (this._hoverMeshes?.length) {
+            for (const m of this._hoverMeshes) {
+              if (m.buffer) gl.deleteBuffer(m.buffer);
+              if (m.indexBuffer) gl.deleteBuffer(m.indexBuffer);
+            }
+            this._hoverMeshes = [];
+          }
+          if (this.buffer) gl.deleteBuffer(this.buffer);
+          if (this.indexBuffer) gl.deleteBuffer(this.indexBuffer);
+          if (this.hoverBuffer) gl.deleteBuffer(this.hoverBuffer);
+          if (this.hoverIndexBuffer) gl.deleteBuffer(this.hoverIndexBuffer);
+          if (this.program) gl.deleteProgram(this.program);
+          this.buffer = null;
+          this.indexBuffer = null;
+          this.hoverBuffer = null;
+          this.hoverIndexBuffer = null;
+          this.program = null;
+          this.gl = null;
+        },
+        setTrack(points, colorHex) {
+          this.setTracks(points?.length ? [{ points, colorHex }] : []);
+        },
+        setTracks(items) {
+          const gl = this.gl;
+          if (this._meshes?.length && gl) {
+            for (const m of this._meshes) {
+              if (m.buffer) gl.deleteBuffer(m.buffer);
+              if (m.indexBuffer) gl.deleteBuffer(m.indexBuffer);
+            }
+          }
+          this._meshes = [];
+          this._vertexCount = 0;
+          this._positions = null;
+          this._indices = null;
+          const list = Array.isArray(items) ? items : [];
+          for (const item of list) {
+            const points = item?.points;
+            const colorHex = item?.colorHex || item?.color || "#2563EB";
+            if (!points?.length || typeof maplibregl === "undefined") continue;
+            const merc = [];
+            for (let i = 0; i < points.length; i++) {
+              const p = points[i];
+              const m = maplibregl.MercatorCoordinate.fromLngLat(
+                { lng: p.lon, lat: p.lat },
+                Math.max(0, p.h)
+              );
+              merc.push({
+                x: m.x,
+                y: m.y,
+                z: m.z,
+                meter: m.meterInMercatorCoordinateUnits(),
+              });
+            }
+            if (merc.length < 2) continue;
+            const half = MAP3D_LINE_HALF_WIDTH_M;
+            const verts = [];
+            const idx = [];
+            const ring = [];
+            for (let i = 0; i < merc.length; i++) {
+              const prev = merc[Math.max(0, i - 1)];
+              const curr = merc[i];
+              const next = merc[Math.min(merc.length - 1, i + 1)];
+              let tx = next.x - prev.x;
+              let ty = next.y - prev.y;
+              let tz = next.z - prev.z;
+              let tLen = Math.hypot(tx, ty, tz) || 1e-12;
+              tx /= tLen; ty /= tLen; tz /= tLen;
+              let bx = -ty;
+              let by = tx;
+              let bz = 0;
+              let bLen = Math.hypot(bx, by);
+              if (bLen < 1e-8) {
+                bx = 1; by = 0; bz = 0;
+                bLen = 1;
+              } else {
+                bx /= bLen; by /= bLen;
+              }
+              let nx = ty * bz - tz * by;
+              let ny = tz * bx - tx * bz;
+              let nz = tx * by - ty * bx;
+              let nLen = Math.hypot(nx, ny, nz) || 1e-12;
+              nx /= nLen; ny /= nLen; nz /= nLen;
+              const w = half * curr.meter;
+              const corners = [
+                [curr.x - bx * w - nx * w, curr.y - by * w - ny * w, curr.z - bz * w - nz * w],
+                [curr.x + bx * w - nx * w, curr.y + by * w - ny * w, curr.z + bz * w - nz * w],
+                [curr.x + bx * w + nx * w, curr.y + by * w + ny * w, curr.z + bz * w + nz * w],
+                [curr.x - bx * w + nx * w, curr.y - by * w + ny * w, curr.z - bz * w + nz * w],
+              ];
+              const base = verts.length / 3;
+              corners.forEach((c) => {
+                verts.push(c[0], c[1], c[2]);
+              });
+              ring.push(base);
+              if (i > 0) {
+                const a = ring[i - 1];
+                const b = base;
+                for (let k = 0; k < 4; k++) {
+                  const k2 = (k + 1) % 4;
+                  idx.push(a + k, b + k, b + k2);
+                  idx.push(a + k, b + k2, a + k2);
+                }
+              }
+            }
+            if (!idx.length) continue;
+            const mesh = {
+              positions: new Float32Array(verts),
+              indices: new Uint32Array(idx),
+              vertexCount: idx.length,
+              color: hexToRgba01(colorHex, 1),
+              buffer: null,
+              indexBuffer: null,
+            };
+            if (gl) {
+              mesh.buffer = gl.createBuffer();
+              mesh.indexBuffer = gl.createBuffer();
+              gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffer);
+              gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
+              gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+            }
+            this._meshes.push(mesh);
+            this._vertexCount += mesh.vertexCount;
+          }
+          if (this._meshes.length === 1) this._color = this._meshes[0].color;
+          this.map?.triggerRepaint();
+        },
+        clearTrack() {
+          this.setTracks([]);
+          this.clearHoverPoint();
+        },
+        setHoverPoint(lon, lat, alt, colorHex) {
+          this.setHoverPoints([{ lon, lat, alt, colorHex }]);
+        },
+        setHoverPoints(points) {
+          const gl = this.gl;
+          if (this._hoverMeshes?.length && gl) {
+            for (const m of this._hoverMeshes) {
+              if (m.buffer) gl.deleteBuffer(m.buffer);
+              if (m.indexBuffer) gl.deleteBuffer(m.indexBuffer);
+            }
+          }
+          this._hoverMeshes = [];
+          this._hoverVertexCount = 0;
+          this._hoverPositions = null;
+          this._hoverIndices = null;
+          if (!points?.length || typeof maplibregl === "undefined") {
+            this.map?.triggerRepaint();
+            return;
+          }
+          const idxTemplate = [
+            0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1,
+            5, 2, 1, 5, 3, 2, 5, 4, 3, 5, 1, 4,
+          ];
+          for (const p of points) {
+            const lon = Number(p.lon);
+            const lat = Number(p.lat);
+            if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+            const m = maplibregl.MercatorCoordinate.fromLngLat(
+              { lng: lon, lat },
+              Math.max(0, Number(p.alt) || 0)
+            );
+            const r = 2.8 * m.meterInMercatorCoordinateUnits();
+            const cx = m.x;
+            const cy = m.y;
+            const cz = m.z;
+            const verts = new Float32Array([
+              cx, cy, cz + r,
+              cx + r, cy, cz,
+              cx, cy + r, cz,
+              cx - r, cy, cz,
+              cx, cy - r, cz,
+              cx, cy, cz - r,
+            ]);
+            const idx = new Uint16Array(idxTemplate);
+            const mesh = {
+              positions: verts,
+              indices: idx,
+              vertexCount: idx.length,
+              color: hexToRgba01(p.colorHex || "#2563EB", 1),
+              buffer: null,
+              indexBuffer: null,
+            };
+            if (gl) {
+              mesh.buffer = gl.createBuffer();
+              mesh.indexBuffer = gl.createBuffer();
+              gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffer);
+              gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
+              gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.DYNAMIC_DRAW);
+            }
+            this._hoverMeshes.push(mesh);
+          }
+          if (this._hoverMeshes.length === 1) {
+            const only = this._hoverMeshes[0];
+            this._hoverPositions = only.positions;
+            this._hoverIndices = only.indices;
+            this._hoverVertexCount = only.vertexCount;
+            this._hoverColor = only.color;
+            if (gl && this.hoverBuffer && this.hoverIndexBuffer) {
+              gl.bindBuffer(gl.ARRAY_BUFFER, this.hoverBuffer);
+              gl.bufferData(gl.ARRAY_BUFFER, only.positions, gl.DYNAMIC_DRAW);
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.hoverIndexBuffer);
+              gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, only.indices, gl.DYNAMIC_DRAW);
+            }
+          }
+          this.map?.triggerRepaint();
+        },
+        clearHoverPoint() {
+          this.setHoverPoints([]);
+        },
+        render(gl, matrix) {
+          if (!this.visible || !this.program) return;
+          const raw = matrix?.defaultProjectionData?.mainMatrix || matrix;
+          if (!raw) return;
+          const mat = raw instanceof Float32Array ? raw : new Float32Array(raw);
+          gl.useProgram(this.program);
+          gl.uniformMatrix4fv(this.uMatrix, false, mat);
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.enableVertexAttribArray(this.aPos);
+
+          if (this._meshes?.length) {
+            for (const mesh of this._meshes) {
+              if (!mesh.vertexCount || !mesh.buffer || !mesh.indexBuffer) continue;
+              gl.uniform4fv(this.uColor, mesh.color || this._color);
+              gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffer);
+              gl.vertexAttribPointer(this.aPos, 3, gl.FLOAT, false, 0, 0);
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
+              gl.drawElements(gl.TRIANGLES, mesh.vertexCount, gl.UNSIGNED_INT, 0);
+            }
+          } else if (this._vertexCount && this.buffer && this.indexBuffer) {
+            gl.uniform4fv(this.uColor, this._color);
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+            gl.vertexAttribPointer(this.aPos, 3, gl.FLOAT, false, 0, 0);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+            gl.drawElements(gl.TRIANGLES, this._vertexCount, gl.UNSIGNED_INT, 0);
+          }
+
+          if (this._hoverMeshes?.length) {
+            for (const mesh of this._hoverMeshes) {
+              if (!mesh.vertexCount || !mesh.buffer || !mesh.indexBuffer) continue;
+              gl.uniform4fv(this.uColor, mesh.color || [1, 1, 1, 1]);
+              gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffer);
+              gl.vertexAttribPointer(this.aPos, 3, gl.FLOAT, false, 0, 0);
+              gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer);
+              gl.drawElements(gl.TRIANGLES, mesh.vertexCount, gl.UNSIGNED_SHORT, 0);
+            }
+          } else if (this._hoverVertexCount && this.hoverBuffer && this.hoverIndexBuffer) {
+            gl.uniform4fv(this.uColor, this._hoverColor || [1, 1, 1, 1]);
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.hoverBuffer);
+            gl.vertexAttribPointer(this.aPos, 3, gl.FLOAT, false, 0, 0);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.hoverIndexBuffer);
+            gl.drawElements(gl.TRIANGLES, this._hoverVertexCount, gl.UNSIGNED_SHORT, 0);
+          }
+        },
+      };
+      return layer;
+    }
+
+    function ensureMap3dLayers() {
+      if (!map3d) return;
+      ensureMap3dContextLayers();
+      if (map3d.getLayer("selected-track-3d-wall")) {
+        try { map3d.removeLayer("selected-track-3d-wall"); } catch (_) { /* ignore */ }
+      }
+      if (map3d.getSource("selected-track-3d")) {
+        try {
+          map3d.getSource("selected-track-3d").setData({ type: "FeatureCollection", features: [] });
+        } catch (_) { /* ignore */ }
+      }
+      if (!map3d.getLayer("selected-track-3d-line")) {
+        selectedTrack3dLineLayer = createSelectedTrack3dLineLayer();
+        map3d.addLayer(selectedTrack3dLineLayer);
+      }
+    }
+
+    function circlePolygonLonLat(lon, lat, radiusM, steps = 48) {
+      const coords = [];
+      const cosLat = Math.cos((lat * Math.PI) / 180) || 1e-6;
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const dx = Math.cos(a) * radiusM;
+        const dy = Math.sin(a) * radiusM;
+        coords.push([
+          lon + dx / (111320 * cosLat),
+          lat + dy / 111320,
+        ]);
+      }
+      return coords;
+    }
+
+    function ensureMap3dContextLayers() {
+      if (!map3d) return;
+      const empty = { type: "FeatureCollection", features: [] };
+      const sources = [
+        ["district-3d", empty],
+        ["coverage-3d", empty],
+        ["tracks-3d", empty],
+        ["airports-3d", empty],
+      ];
+      sources.forEach(([id, data]) => {
+        if (!map3d.getSource(id)) {
+          const opts = { type: "geojson", data };
+          if (id === "tracks-3d" || id === "airports-3d") opts.promoteId = "id";
+          map3d.addSource(id, opts);
+        }
+      });
+
+      if (!map3d.getLayer("district-3d-fill")) {
+        map3d.addLayer({
+          id: "district-3d-fill",
+          type: "fill",
+          source: "district-3d",
+          paint: {
+            "fill-color": "#E67E22",
+            "fill-opacity": 0.06,
+          },
+        });
+      }
+      if (!map3d.getLayer("district-3d-line")) {
+        map3d.addLayer({
+          id: "district-3d-line",
+          type: "line",
+          source: "district-3d",
+          paint: {
+            "line-color": "#E67E22",
+            "line-width": 2,
+          },
+        });
+      }
+      if (!map3d.getLayer("coverage-3d-fill")) {
+        map3d.addLayer({
+          id: "coverage-3d-fill",
+          type: "fill",
+          source: "coverage-3d",
+          paint: {
+            "fill-color": ["get", "color"],
+            "fill-opacity": 0.06,
+          },
+        });
+      }
+      if (!map3d.getLayer("coverage-3d-line")) {
+        map3d.addLayer({
+          id: "coverage-3d-line",
+          type: "line",
+          source: "coverage-3d",
+          paint: {
+            "line-color": ["get", "color"],
+            "line-width": 1,
+            "line-dasharray": [2, 2],
+          },
+        });
+      }
+      if (!map3d.getLayer("tracks-3d-line")) {
+        map3d.addLayer({
+          id: "tracks-3d-line",
+          type: "line",
+          source: "tracks-3d",
+          paint: {
+            "line-color": ["get", "color"],
+            "line-width": ["coalesce", ["get", "weight"], 2],
+            "line-opacity": [
+              "case",
+              ["boolean", ["feature-state", "hover"], false],
+              1,
+              ["coalesce", ["get", "opacity"], 0.22],
+            ],
+          },
+        });
+      }
+      if (!map3d.getLayer("tracks-3d-hit")) {
+        map3d.addLayer({
+          id: "tracks-3d-hit",
+          type: "line",
+          source: "tracks-3d",
+          paint: {
+            "line-color": "#000",
+            "line-width": 14,
+            "line-opacity": 0,
+          },
+        });
+      }
+      if (!map3d.getLayer("airports-3d")) {
+        map3d.addLayer({
+          id: "airports-3d",
+          type: "circle",
+          source: "airports-3d",
+          paint: {
+            "circle-radius": 7,
+            "circle-color": ["get", "color"],
+            "circle-stroke-width": 1.5,
+            "circle-stroke-color": "#fff",
+            "circle-opacity": 0.92,
+          },
+        });
+      }
+    }
+
+    function setMap3dLayerVisible(layerId, visible) {
+      if (!map3d?.getLayer(layerId)) return;
+      map3d.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+    }
+
+    function showMap3dPopup(lngLat, html) {
+      if (!map3d || typeof maplibregl === "undefined") return;
+      if (!map3dPopup) {
+        map3dPopup = new maplibregl.Popup({
+          closeButton: true,
+          closeOnClick: true,
+          maxWidth: "320px",
+          className: "map3d-popup",
+        });
+      }
+      map3dPopup.setLngLat(lngLat).setHTML(html).addTo(map3d);
+    }
+
+    function clearMap3dPopup() {
+      if (map3dPopup) {
+        map3dPopup.remove();
+        map3dPopup = null;
+      }
+    }
+
+    function applyMap3dTrackHover(id) {
+      if (!map3d || !map3dReady || !map3d.getSource("tracks-3d")) return;
+      if (map3dHoverFeatureId != null && map3dHoverFeatureId !== id) {
+        try {
+          map3d.setFeatureState({ source: "tracks-3d", id: map3dHoverFeatureId }, { hover: false });
+        } catch (_) { /* ignore */ }
+      }
+      if (id != null) {
+        try {
+          map3d.setFeatureState({ source: "tracks-3d", id }, { hover: true });
+        } catch (_) { /* ignore */ }
+      }
+      map3dHoverFeatureId = id;
+    }
+
+    /** 将 2D 图层状态同步到 MapLibre（区划 / 覆盖 / 轨迹线 / 机场 / 立体建筑）。 */
+    function syncMap3dOverlays() {
+      if (!map3d || !map3dReady || !MAP_DATA) return;
+      ensureMap3dLayers();
+      ensureSeriesPos3dLayers();
+      ensureMap3dBuildings();
+
+      const showAirports = !!document.getElementById("layer-airports")?.checked;
+      const showCoverage = !!document.getElementById("layer-coverage")?.checked;
+      const showTracks = !!document.getElementById("layer-tracks")?.checked;
+      const showDistrict = !!document.getElementById("layer-district")?.checked;
+
+      const districtSrc = map3d.getSource("district-3d");
+      if (districtSrc) {
+        const geo = showDistrict ? MAP_DATA.meta.district_boundary : null;
+        if (geo) {
+          districtSrc.setData(
+            geo.type === "FeatureCollection" ? geo : { type: "FeatureCollection", features: [geo] }
+          );
+        } else {
+          districtSrc.setData({ type: "FeatureCollection", features: [] });
+        }
+      }
+      setMap3dLayerVisible("district-3d-fill", showDistrict);
+      setMap3dLayerVisible("district-3d-line", showDistrict);
+
+      const coverageFeatures = [];
+      if (showCoverage) {
+        MAP_DATA.airports.forEach((a) => {
+          if (!matchFactory(a)) return;
+          if (a.longitude == null || a.latitude == null || !a.radius_m) return;
+          coverageFeatures.push({
+            type: "Feature",
+            properties: {
+              id: a.id,
+              name: a.name,
+              color: factoryColor(a),
+              radius_m: a.radius_m,
+              kind: "coverage",
+            },
+            geometry: {
+              type: "Polygon",
+              coordinates: [circlePolygonLonLat(a.longitude, a.latitude, a.radius_m)],
+            },
+          });
+        });
+      }
+      map3d.getSource("coverage-3d")?.setData({ type: "FeatureCollection", features: coverageFeatures });
+      setMap3dLayerVisible("coverage-3d-fill", showCoverage);
+      setMap3dLayerVisible("coverage-3d-line", showCoverage);
+
+      const trackFeatures = [];
+      if (showTracks) {
+        MAP_DATA.tracks.forEach((t) => {
+          if (!shouldShowTrack(t) || !t.coords?.length) return;
+          const style = trackLineStyle(t);
+          const isSelected = selectedTrackId === t.id;
+          const isHover = hoverTrackId === t.id;
+          trackFeatures.push({
+            type: "Feature",
+            id: t.id,
+            properties: {
+              id: t.id,
+              color: style.color,
+              opacity: style.opacity,
+              weight: style.weight,
+              kind: "track",
+            },
+            geometry: {
+              type: "LineString",
+              coordinates: t.coords,
+            },
+          });
+        });
+      }
+      map3d.getSource("tracks-3d")?.setData({ type: "FeatureCollection", features: trackFeatures });
+      setMap3dLayerVisible("tracks-3d-line", showTracks);
+      setMap3dLayerVisible("tracks-3d-hit", showTracks);
+      if (selectedTrack3dLineLayer) {
+        selectedTrack3dLineLayer.visible = !!(showTracks && in3dMode);
+        map3d.triggerRepaint();
+      }
+      map3dHoverFeatureId = null;
+      if (hoverTrackId != null) applyMap3dTrackHover(hoverTrackId);
+
+      const airportFeatures = [];
+      if (showAirports) {
+        MAP_DATA.airports.forEach((a) => {
+          if (!matchFactory(a)) return;
+          if (a.longitude == null || a.latitude == null) return;
+          airportFeatures.push({
+            type: "Feature",
+            id: a.id,
+            properties: {
+              id: a.id,
+              color: factoryColor(a),
+              kind: "airport",
+              name: a.name,
+            },
+            geometry: {
+              type: "Point",
+              coordinates: [a.longitude, a.latitude],
+            },
+          });
+        });
+      }
+      map3d.getSource("airports-3d")?.setData({ type: "FeatureCollection", features: airportFeatures });
+      setMap3dLayerVisible("airports-3d", showAirports);
+    }
+
+    function setupMap3dInteractions(m) {
+      if (!m || map3dInteractBound) return;
+      map3dInteractBound = true;
+      const pickLayers = [
+        "tracks-3d-hit",
+        "airports-3d",
+        "coverage-3d-fill",
+        "district-3d-fill",
+      ];
+
+      m.on("mousemove", (e) => {
+        if (!in3dMode) return;
+        const feats = m.queryRenderedFeatures(e.point, {
+          layers: pickLayers.filter((id) => m.getLayer(id)),
+        });
+        const trackHit = feats.find((f) => f.layer?.id === "tracks-3d-hit");
+        const canvas = m.getCanvas();
+        if (trackHit) {
+          const tid = Number(trackHit.properties?.id);
+          if (Number.isFinite(tid)) setHoverTrack(tid);
+          canvas.style.cursor = "pointer";
+        } else {
+          if (hoverTrackId != null) setHoverTrack(null);
+          canvas.style.cursor = feats.length ? "pointer" : "";
+        }
+      });
+
+      m.on("mouseleave", () => {
+        if (hoverTrackId != null) setHoverTrack(null);
+        m.getCanvas().style.cursor = "";
+      });
+
+      m.on("click", (e) => {
+        if (!in3dMode) return;
+        const feats = m.queryRenderedFeatures(e.point, {
+          layers: pickLayers.filter((id) => m.getLayer(id)),
+        });
+        if (!feats.length) {
+          clearMap3dPopup();
+          return;
+        }
+        const trackHit = feats.find((f) => f.layer?.id === "tracks-3d-hit");
+        if (trackHit) {
+          const tid = Number(trackHit.properties?.id);
+          if (Number.isFinite(tid)) focusTrack(tid);
+          return;
+        }
+        const airport = feats.find((f) => f.layer?.id === "airports-3d");
+        if (airport) {
+          const aid = airport.properties?.id;
+          const a = MAP_DATA?.airports?.find((x) => x.id === aid);
+          if (a) showMap3dPopup(e.lngLat, airportPopup(a));
+          return;
+        }
+        const coverage = feats.find((f) => f.layer?.id === "coverage-3d-fill");
+        if (coverage) {
+          const name = coverage.properties?.name || "机场";
+          const r = Number(coverage.properties?.radius_m) || 0;
+          showMap3dPopup(
+            e.lngLat,
+            `<b>${name}</b><br>覆盖半径 ${(r / 1000).toFixed(1)} km`
+          );
+          return;
+        }
+        const district = feats.find((f) => f.layer?.id === "district-3d-fill");
+        if (district) {
+          showMap3dPopup(
+            e.lngLat,
+            `<b>${MAP_DATA.meta.district_name || "越城区"}</b><br>看板「行政内」KPI 按此行政区划面统计`
+          );
+        }
+      });
+    }
+
+    function seriesChartColors() {
+      const isDark = document.documentElement.dataset.theme === "linear";
+      return {
+        height: isDark ? "#60A5FA" : "#2563EB",
+        speed: isDark ? "#FBBF24" : "#EA580C",
+        distance: isDark ? "#34D399" : "#059669",
+      };
+    }
+
+    function formatSeriesNum(v, digits) {
+      if (v == null || !Number.isFinite(Number(v))) return "—";
+      return Number(v).toFixed(digits);
+    }
+
+    /** 与时序 Chart.js tooltip 相同的标注内容。 */
+    function seriesPosAnnotationHtml(track, dataIndex) {
+      const series = track?.series;
+      const tMin = series?.t_min?.[dataIndex];
+      const title = tMin != null ? `起飞后 ${Number(tMin).toFixed(1)} 分钟` : "时序点";
+      const colors = seriesChartColors();
+      const rows = [
+        { color: colors.height, label: "高度 (m)", value: formatSeriesNum(series?.height_m?.[dataIndex], 0) },
+        { color: colors.speed, label: "速度 (km/h)", value: formatSeriesNum(series?.speed_kmh?.[dataIndex], 1) },
+        { color: colors.distance, label: "累计距离 (km)", value: formatSeriesNum(series?.distance_km?.[dataIndex], 2) },
+      ];
+      const ll = seriesPointLatLng(track, dataIndex);
+      const footer = ll ? `位置 ${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}` : "";
+      const rowsHtml = rows
+        .map(
+          (r) =>
+            `<div class="series-pos-tip-row"><span class="series-pos-tip-swatch" style="background:${r.color}"></span>${r.label}: ${r.value}</div>`
+        )
+        .join("");
+      return (
+        `<div class="series-pos-tip">` +
+        `<div class="series-pos-tip-title">${title}</div>` +
+        rowsHtml +
+        (footer ? `<div class="series-pos-tip-footer">${footer}</div>` : "") +
+        `</div>`
+      );
+    }
+
+    function makeSeriesPosPinElement(track, dataIndex, accent) {
+      const el = document.createElement("div");
+      el.className = "series-pos-pin";
+      el.innerHTML =
+        seriesPosAnnotationHtml(track, dataIndex) +
+        `<div class="series-pos-dot" style="background:${accent || css("--accent") || "#2563EB"}"></div>`;
+      return el;
+    }
+
+    function updateSeriesPosPinElement(root, track, dataIndex, accent) {
+      if (!root) return;
+      const bg = accent || css("--accent") || "#2563EB";
+      root.innerHTML =
+        seriesPosAnnotationHtml(track, dataIndex) +
+        `<div class="series-pos-dot" style="background:${bg}"></div>`;
+    }
+
+    /** 与 3D 航迹 WebGL 层同一套坐标：MercatorCoordinate(含海拔) × customLayerMatrix → 屏幕像素。 */
+    function projectLngLatAlt(map, lng, lat, altM) {
+      if (!map || typeof maplibregl === "undefined") return null;
+      const merc = maplibregl.MercatorCoordinate.fromLngLat(
+        { lng, lat },
+        Number(altM) || 0
+      );
+      const tr = map.transform;
+      if (!tr) return null;
+
+      let matrix = null;
+      if (typeof tr.customLayerMatrix === "function") {
+        matrix = tr.customLayerMatrix();
+      }
+      if (matrix && matrix.length >= 16) {
+        const m = matrix instanceof Float32Array ? matrix : new Float32Array(matrix);
+        const x = merc.x;
+        const y = merc.y;
+        const z = merc.z;
+        const clipX = m[0] * x + m[4] * y + m[8] * z + m[12];
+        const clipY = m[1] * x + m[5] * y + m[9] * z + m[13];
+        const clipW = m[3] * x + m[7] * y + m[11] * z + m[15];
+        if (!Number.isFinite(clipW) || Math.abs(clipW) < 1e-12) return null;
+        const ndcX = clipX / clipW;
+        const ndcY = clipY / clipW;
+        if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY)) return null;
+        const width = tr.width || map.getContainer().clientWidth;
+        const height = tr.height || map.getContainer().clientHeight;
+        return {
+          x: (ndcX * 0.5 + 0.5) * width,
+          y: (-ndcY * 0.5 + 0.5) * height,
+        };
+      }
+
+      // 回退：旧 coordinatePoint（海拔米）
+      if (typeof tr.coordinatePoint === "function") {
+        let coord;
+        if (typeof tr.locationCoordinate === "function") {
+          coord = tr.locationCoordinate({ lng, lat });
+        } else {
+          coord = maplibregl.MercatorCoordinate.fromLngLat({ lng, lat });
+        }
+        const pt = tr.coordinatePoint(coord, Number(altM) || 0, tr.pixelMatrix3D || tr.pixelMatrix);
+        if (!pt || !Number.isFinite(pt.x) || !Number.isFinite(pt.y)) return null;
+        return pt;
+      }
+      return null;
+    }
+
+    function ensureSeriesPos3dLayers() {
+      if (!map3d) return;
+      if (!map3d.getSource("series-pos-3d")) {
+        map3d.addSource("series-pos-3d", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+      }
+      if (!map3d.getLayer("series-pos-3d-bead")) {
+        map3d.addLayer({
+          id: "series-pos-3d-bead",
+          type: "fill-extrusion",
+          source: "series-pos-3d",
+          paint: {
+            "fill-extrusion-color": ["get", "color"],
+            "fill-extrusion-height": ["get", "height"],
+            "fill-extrusion-base": ["get", "base"],
+            "fill-extrusion-opacity": 1,
+          },
+        });
+      }
+    }
+
+    function setSeriesPos3dBead(lon, lat, alt, accent) {
+      if (!map3d) return;
+      ensureSeriesPos3dLayers();
+      const src = map3d.getSource("series-pos-3d");
+      if (!src) return;
+      // 小珠贴近航迹采样点，避免大块挤出造成「偏了」的观感
+      const halfM = 1.2;
+      const cosLat = Math.cos((lat * Math.PI) / 180) || 1e-6;
+      const dLon = halfM / (111320 * cosLat);
+      const dLat = halfM / 111320;
+      const base = Math.max(0, alt - halfM);
+      const height = Math.max(alt + halfM, base + 0.4);
+      src.setData({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: { color: accent, base, height },
+            geometry: {
+              type: "Polygon",
+              coordinates: [[
+                [lon - dLon, lat - dLat],
+                [lon + dLon, lat - dLat],
+                [lon + dLon, lat + dLat],
+                [lon - dLon, lat + dLat],
+                [lon - dLon, lat - dLat],
+              ]],
+            },
+          },
+        ],
+      });
+    }
+
+    function clearSeriesPos3dBead() {
+      if (!map3d) return;
+      const src = map3d.getSource("series-pos-3d");
+      if (src) src.setData({ type: "FeatureCollection", features: [] });
+    }
+
+    function updateSeriesPos3dPinScreen() {
+      if (!map3d) return;
+      const box = map3d.getContainer();
+      const w = box?.clientWidth || 0;
+      const h = box?.clientHeight || 0;
+      const place = (el, state) => {
+        if (!el || !state) return;
+        const pt = projectLngLatAlt(map3d, state.lng, state.lat, state.alt);
+        if (!pt) {
+          el.style.visibility = "hidden";
+          return;
+        }
+        if (pt.x < -80 || pt.y < -80 || pt.x > w + 80 || pt.y > h + 80) {
+          el.style.visibility = "hidden";
+          return;
+        }
+        el.style.visibility = "visible";
+        el.style.transform =
+          `translate(-50%, calc(-100% + 9px)) translate(${pt.x.toFixed(1)}px, ${pt.y.toFixed(1)}px)`;
+      };
+      place(seriesPos3dEl, seriesPos3dState);
+      for (const item of seriesPosExtra3dPins) {
+        place(item.el, item.state);
+      }
+    }
+
+    function ensureSeriesPos3dRenderHook() {
+      if (!map3d || map3d.__seriesPosRenderBound) return;
+      map3d.__seriesPosRenderBound = true;
+      map3d.on("render", updateSeriesPos3dPinScreen);
+    }
+
+    function showSeriesPos3dMarker(track, dataIndex) {
+      if (!map3d || !map3dReady || !in3dMode || !track || typeof maplibregl === "undefined") {
+        clearSeriesPos3dMarker();
+        return;
+      }
+      // 优先用时序同源 lon/lat，避免 coords 比例插值偏差
+      const series = track.series;
+      let lon = series?.lon?.[dataIndex];
+      let lat = series?.lat?.[dataIndex];
+      if (lon == null || lat == null || !Number.isFinite(Number(lon)) || !Number.isFinite(Number(lat))) {
+        const ll = seriesPointLatLng(track, dataIndex);
+        if (!ll) {
+          clearSeriesPos3dMarker();
+          return;
+        }
+        lat = ll[0];
+        lon = ll[1];
+      } else {
+        lon = Number(lon);
+        lat = Number(lat);
+      }
+      const { heights, usedDefault120 } = displayHeightsFor3d(series);
+      const heightM = heights?.[dataIndex];
+      const elevM = series?.elevation_m?.[dataIndex];
+      const alt = absoluteAltitudeFor3d(
+        lon,
+        lat,
+        heightM != null && Number.isFinite(Number(heightM)) ? Number(heightM) : 0,
+        elevM,
+        usedDefault120
+      );
+      const accent = css("--accent") || "#2563EB";
+      seriesPos3dState = { lng: lon, lat, alt, accent };
+      // 立体定位点走 WebGL（与航迹同坐标系）；不再用大块挤出珠
+      clearSeriesPos3dBead();
+      if (!compareActive) {
+        selectedTrack3dLineLayer?.setHoverPoint?.(lon, lat, alt, accent);
+      }
+      if (!seriesPos3dEl) {
+        seriesPos3dEl = makeSeriesPosPinElement(track, dataIndex, accent);
+        seriesPos3dEl.classList.add("series-pos-3d-pin");
+        const host = map3d.getCanvasContainer() || map3d.getContainer();
+        host.appendChild(seriesPos3dEl);
+      } else {
+        updateSeriesPosPinElement(seriesPos3dEl, track, dataIndex, accent);
+      }
+      ensureSeriesPos3dRenderHook();
+      updateSeriesPos3dPinScreen();
+    }
+
+    function clearSeriesPos3dMarker() {
+      seriesPos3dState = null;
+      if (seriesPos3dEl) {
+        seriesPos3dEl.remove();
+        seriesPos3dEl = null;
+      }
+      clearSeriesPos3dBead();
+      if (!compareActive) selectedTrack3dLineLayer?.clearHoverPoint?.();
+    }
+
+    function clearSeriesPosExtra3dPins() {
+      for (const item of seriesPosExtra3dPins) {
+        try { item.el?.remove(); } catch (_) { /* ignore */ }
+      }
+      seriesPosExtra3dPins = [];
+    }
+
+    function clearSeriesPosExtraMarkers() {
+      for (const m of seriesPosExtraMarkers.values()) {
+        try { m.remove(); } catch (_) { /* ignore */ }
+      }
+      seriesPosExtraMarkers = new Map();
+      clearSeriesPosExtra3dPins();
+    }
+
+    function clearPrimarySeriesPosMarker() {
+      if (seriesPosMarker) {
+        seriesPosMarker.remove();
+        seriesPosMarker = null;
+      }
+      if (seriesPos3dEl) {
+        seriesPos3dEl.remove();
+        seriesPos3dEl = null;
+      }
+      seriesPos3dState = null;
+    }
+
+    function clearSeriesPosMarker() {
+      clearPrimarySeriesPosMarker();
+      clearSeriesPosExtraMarkers();
+      clearSeriesPos3dBead();
+      selectedTrack3dLineLayer?.clearHoverPoint?.();
+    }
+
+    function showCompareExtraPosMarkers(tCursor, opts = {}) {
+      if (!compareActive) {
+        clearSeriesPosExtraMarkers();
+        return;
+      }
+      const keep2d = new Set();
+      const keep3d = new Set();
+      const hoverPts = [];
+      const host = in3dMode && map3d
+        ? (map3d.getCanvasContainer() || map3d.getContainer())
+        : null;
+      const forceTip = !!opts.forceTip;
+
+      for (const t of getCompareTracks()) {
+        if (!t.series?.t_min?.length) continue;
+        const sample = seriesInterpAtTime(t, tCursor);
+        if (!sample || sample.lat == null || sample.lon == null) continue;
+        if (!Number.isFinite(sample.lat) || !Number.isFinite(sample.lon)) continue;
+        const color = compareTrackColor(t.id);
+        const alt = seriesAltForSample(t, sample);
+        const tipOpts = { trackLabel: compareTrackPosLabel(t) };
+        const pinHtml = seriesPosPinInnerHtml(sample, color, tipOpts);
+        if (in3dMode) {
+          hoverPts.push({ lon: sample.lon, lat: sample.lat, alt, colorHex: color });
+        }
+
+        if (t.id === selectedTrackId) continue;
+
+        if (map) {
+          keep2d.add(t.id);
+          const existing = seriesPosExtraMarkers.get(t.id);
+          const tipIdx = sample.i0;
+          if (existing) {
+            existing.setLatLng([sample.lat, sample.lon]);
+            const needTip = forceTip || existing.__tipIdx !== tipIdx;
+            if (needTip) {
+              const root = existing.getElement()?.querySelector?.(".series-pos-pin");
+              if (root) root.innerHTML = pinHtml;
+              existing.__tipIdx = tipIdx;
+            }
+          } else {
+            const pin = document.createElement("div");
+            pin.className = "series-pos-pin";
+            pin.innerHTML = pinHtml;
+            const marker = L.marker([sample.lat, sample.lon], {
+              interactive: false,
+              keyboard: false,
+              zIndexOffset: 800,
+              icon: L.divIcon({
+                className: "series-pos-divicon",
+                html: pin.outerHTML,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0],
+              }),
+            }).addTo(map);
+            marker.__tipIdx = tipIdx;
+            seriesPosExtraMarkers.set(t.id, marker);
+          }
+        }
+
+        if (host) {
+          keep3d.add(t.id);
+          let item = seriesPosExtra3dPins.find((x) => x.trackId === t.id);
+          const tipIdx = sample.i0;
+          if (!item) {
+            const el = document.createElement("div");
+            el.className = "series-pos-pin series-pos-3d-pin series-pos-3d-extra";
+            el.innerHTML = pinHtml;
+            host.appendChild(el);
+            item = { trackId: t.id, el, state: null, tipIdx };
+            seriesPosExtra3dPins.push(item);
+          } else if (forceTip || item.tipIdx !== tipIdx) {
+            item.el.innerHTML = pinHtml;
+            item.tipIdx = tipIdx;
+          }
+          item.state = { lng: sample.lon, lat: sample.lat, alt, accent: color };
+        }
+      }
+
+      for (const [id, marker] of [...seriesPosExtraMarkers.entries()]) {
+        if (!keep2d.has(id)) {
+          try { marker.remove(); } catch (_) { /* ignore */ }
+          seriesPosExtraMarkers.delete(id);
+        }
+      }
+      seriesPosExtra3dPins = seriesPosExtra3dPins.filter((item) => {
+        if (keep3d.has(item.trackId)) return true;
+        try { item.el.remove(); } catch (_) { /* ignore */ }
+        return false;
+      });
+
+      if (in3dMode && map3dReady) {
+        selectedTrack3dLineLayer?.setHoverPoints?.(hoverPts);
+        ensureSeriesPos3dRenderHook();
+        updateSeriesPos3dPinScreen();
+      }
+    }
+
+    /** MapLibre 默认：左键平移、右键方位+俯仰；仅拦截右键菜单。 */
+    function setupMap3dOrbitControls(m) {
+      if (!m || m.__orbitControlsBound) return;
+      m.__orbitControlsBound = true;
+      m.dragPan.enable();
+      m.dragRotate.enable();
+      m.getCanvas().addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+      });
+    }
+
+    function ensureMap3d() {
+      if (map3d) return map3d;
+      if (typeof maplibregl === "undefined") {
+        console.warn("MapLibre 未加载，跳过 3D 视图");
+        return null;
+      }
+      const theme = document.documentElement.dataset.theme;
+      const center = map
+        ? [map.getCenter().lng, map.getCenter().lat]
+        : [120.58, 30.0];
+      const zoom = map ? map.getZoom() : 12;
+      map3d = new maplibregl.Map({
+        container: "map3d",
+        style: map3dStyleForTheme(theme),
+        center,
+        zoom,
+        pitch: 0,
+        bearing: 0,
+        maxPitch: 85,
+        dragRotate: true,
+        pitchWithRotate: true,
+        attributionControl: true,
+        canvasContextAttributes: { antialias: true },
+      });
+      map3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+      if (typeof maplibregl.TerrainControl === "function") {
+        map3d.addControl(
+          new maplibregl.TerrainControl({
+            source: "terrain-dem",
+            exaggeration: MAP3D_TERRAIN_EXAGGERATION,
+          }),
+          "top-right"
+        );
+      }
+      setupMap3dOrbitControls(map3d);
+      map3d.on("load", () => {
+        map3dReady = true;
+        ensureMap3dLayers();
+        ensureSeriesPos3dLayers();
+        ensureMap3dTerrain();
+        ensureMap3dBuildings();
+        bindMap3dTerrainRebuild();
+        setupMap3dInteractions(map3d);
+        syncMap3dOverlays();
+        if (map3dPendingTrack) {
+          const pending = map3dPendingTrack;
+          map3dPendingTrack = null;
+          applyTrack3dView(pending, true);
+        }
+      });
+      return map3d;
+    }
+
+    const MAP3D_ORBIT_HINT = "左键拖：平移 · 右键拖：方位与俯仰 · 滚轮放大可见立体建筑";
+
+    function finiteSeriesMax(arr) {
+      let m = null;
+      for (const v of arr || []) {
+        if (v == null || !Number.isFinite(Number(v))) continue;
+        const n = Number(v);
+        m = m == null ? n : Math.max(m, n);
+      }
+      return m;
+    }
+
+    function finiteSeriesLast(arr) {
+      if (!arr?.length) return null;
+      for (let i = arr.length - 1; i >= 0; i--) {
+        const v = arr[i];
+        if (v != null && Number.isFinite(Number(v))) return Number(v);
+      }
+      return null;
+    }
+
+    /** 与时序曲线同源：优先用 series 汇总，否则回退轨迹级字段。 */
+    function seriesSummaryStats(track) {
+      const s = track?.series;
+      const out = {
+        duration_min: track?.duration_min ?? null,
+        distance_km: track?.distance_m != null ? track.distance_m / 1000 : null,
+        max_height_m: track?.max_height_m ?? null,
+        max_speed_kmh: track?.max_speed_kmh ?? null,
+        fromSeries: false,
+      };
+      if (!s?.t_min?.length) return out;
+      const tLast = finiteSeriesLast(s.t_min);
+      if (tLast != null) out.duration_min = Math.round(tLast * 10) / 10;
+      const dLast = finiteSeriesLast(s.distance_km);
+      if (dLast != null) out.distance_km = dLast;
+      const hMax = finiteSeriesMax(s.height_m);
+      if (hMax != null) out.max_height_m = Math.round(hMax * 10) / 10;
+      const vMax = finiteSeriesMax(s.speed_kmh);
+      if (vMax != null) out.max_speed_kmh = Math.round(vMax * 10) / 10;
+      out.fromSeries = true;
+      return out;
+    }
+
+    function trackInfoRows(t) {
+      const st = seriesSummaryStats(t);
+      const rows = [["ID", `#${t.id}`]];
+      if (t.factory) rows.push(["厂商", t.factory]);
+      if (st.duration_min != null) rows.push(["时长", `${st.duration_min} min`]);
+      if (st.distance_km != null) rows.push(["距离", `${Number(st.distance_km).toFixed(1)} km`]);
+      if (st.max_height_m != null) rows.push(["最大高度", `${st.max_height_m} m`]);
+      if (st.max_speed_kmh != null) rows.push(["最大速度", `${st.max_speed_kmh} km/h`]);
+      if (t.start_time) {
+        rows.push(["起飞", String(t.start_time).replace("T", " ").slice(0, 16)]);
+      }
+      return rows;
+    }
+
+    /* ========================================================================
+     * 右上角详情卡
+     * ======================================================================== */
+
+    function showMap3dTrackInfo(track, usedDefault120) {
+      if (compareActive) {
+        showCompareTrackInfo(usedDefault120);
+        return;
+      }
+      const panel = document.getElementById("map3d-track-info");
+      const title = document.getElementById("map3d-track-info-title");
+      const body = document.getElementById("map3d-track-info-body");
+      const hint = document.getElementById("map3d-track-info-hint");
+      if (!panel || !track) return;
+      panel.classList.remove("compare-mode");
+      const color = factoryColor(track);
+      if (title) {
+        title.textContent = track.task_name
+          ? `#${track.id} · ${track.task_name}`
+          : `飞行 #${track.id}`;
+        title.style.borderLeft = `3px solid ${color}`;
+      }
+      if (body) {
+        body.innerHTML = trackInfoRows(track)
+          .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
+          .join("");
+      }
+      if (hint) {
+        if (usedDefault120) {
+          hint.hidden = false;
+          hint.textContent = "高度全为 0，3D 以 120 m 示意";
+        } else {
+          hint.hidden = true;
+          hint.textContent = "";
+        }
+      }
+      panel.hidden = false;
+      const legacy = document.getElementById("map3d-hint");
+      if (legacy) {
+        legacy.hidden = true;
+        legacy.textContent = "";
+      }
+    }
+
+    function showCompareTrackInfo(usedDefault120) {
+      const panel = document.getElementById("map3d-track-info");
+      const title = document.getElementById("map3d-track-info-title");
+      const body = document.getElementById("map3d-track-info-body");
+      const hint = document.getElementById("map3d-track-info-hint");
+      const tracks = getCompareTracks();
+      if (!panel || !tracks.length) return;
+      panel.classList.add("compare-mode");
+      if (title) {
+        title.textContent = `对比 ${tracks.length} 条`;
+        title.style.borderLeft = "";
+      }
+      if (body) {
+        const rows = tracks.map((t) => {
+          const st = seriesSummaryStats(t);
+          const color = compareTrackColor(t.id);
+          const focus = "";
+          const dur = st.duration_min != null ? st.duration_min : "—";
+          const dist = st.distance_km != null ? Number(st.distance_km).toFixed(1) : "—";
+          const h = st.max_height_m != null ? st.max_height_m : "—";
+          const v = st.max_speed_kmh != null ? st.max_speed_kmh : "—";
+          return `<tr class="${focus.trim()}" data-id="${t.id}" style="--compare-swatch:${color}">
+            <td><span class="compare-summary-swatch" style="background:${color}"></span>#${t.id}</td>
+            <td>${t.factory || "—"}</td>
+            <td>${dur}</td>
+            <td>${dist}</td>
+            <td>${h}</td>
+            <td>${v}</td>
+          </tr>`;
+        }).join("");
+        body.innerHTML = `<table class="compare-summary-table">
+          <thead><tr><th>ID</th><th>厂商</th><th>时长</th><th>距离</th><th>最大高度</th><th>最大速度</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+        body.querySelectorAll("tr[data-id]").forEach((tr) => {
+          tr.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const id = Number(tr.dataset.id);
+            if (Number.isFinite(id)) focusTrack(id, { fromCompareTable: true });
+          });
+        });
+      }
+      if (hint) {
+        const anyDefault = tracks.some((t) => displayHeightsFor3d(t.series).usedDefault120);
+        if (anyDefault) {
+          hint.hidden = false;
+          hint.textContent = "双轨摘要并列 · 点位信息同步";
+        } else {
+          hint.hidden = false;
+          hint.textContent = "双轨摘要并列 · 点位信息同步";
+        }
+      }
+      panel.hidden = false;
+      const legacy = document.getElementById("map3d-hint");
+      if (legacy) {
+        legacy.hidden = true;
+        legacy.textContent = "";
+      }
+    }
+
+    function hideMap3dTrackInfo() {
+      const panel = document.getElementById("map3d-track-info");
+      if (panel) {
+        panel.hidden = true;
+        panel.classList.remove("compare-mode");
+      }
+      const body = document.getElementById("map3d-track-info-body");
+      if (body) body.innerHTML = "";
+      const hint = document.getElementById("map3d-track-info-hint");
+      if (hint) {
+        hint.hidden = true;
+        hint.textContent = "";
+      }
+    }
+
+    function setMap3dHint(usedDefault120) {
+      // 兼容旧调用：把提示写入详情卡底部
+      if (in3dMode && map3dTrackId != null && MAP_DATA) {
+        const t = MAP_DATA.tracks.find((x) => x.id === map3dTrackId);
+        if (t) {
+          showMap3dTrackInfo(t, usedDefault120);
+          return;
+        }
+      }
+      const hint = document.getElementById("map3d-hint");
+      if (!hint) return;
+      hint.hidden = false;
+      if (usedDefault120) {
+        hint.textContent =
+          "本轨遥测高度均为 0，3D 视图以 120 m 示意抬升；时序曲线与弹窗仍为真实值 0。 " +
+          MAP3D_ORBIT_HINT;
+      } else {
+        hint.textContent = MAP3D_ORBIT_HINT;
+      }
+    }
+
+    function updateMap3dGeometry(track) {
+      if (!map3d || !map3dReady) return null;
+      ensureMap3dLayers();
+      if (compareActive) {
+        const tracks = getCompareTracks();
+        const items = [];
+        let anyDefault = false;
+        let primaryBuilt = null;
+        for (const t of tracks) {
+          const built = buildSelectedTrack3dLine(t);
+          if (!built) continue;
+          if (built.usedDefault120) anyDefault = true;
+          items.push({ points: built.points, colorHex: darkenHex(compareTrackColor(t.id), 0.55) });
+          if (t.id === selectedTrackId) primaryBuilt = built;
+        }
+        if (!items.length) {
+          selectedTrack3dLineLayer?.clearTrack?.();
+          setMap3dHint(false);
+          syncMap3dOverlays();
+          return null;
+        }
+        selectedTrack3dLineLayer?.setTracks?.(items);
+        if (selectedTrack3dLineLayer) selectedTrack3dLineLayer.visible = true;
+        setMap3dHint(anyDefault);
+        syncMap3dOverlays();
+        return primaryBuilt || {
+          points: items[0].points,
+          color: items[0].colorHex,
+          usedDefault120: anyDefault,
+          path: items[0].points.map((p) => [p.lon, p.lat]),
+        };
+      }
+      const built = buildSelectedTrack3dLine(track);
+      if (!built) {
+        selectedTrack3dLineLayer?.clearTrack?.();
+        setMap3dHint(false);
+        syncMap3dOverlays();
+        return null;
+      }
+      selectedTrack3dLineLayer?.setTrack?.(built.points, built.color);
+      if (selectedTrack3dLineLayer) selectedTrack3dLineLayer.visible = true;
+      setMap3dHint(built.usedDefault120);
+      syncMap3dOverlays();
+      return built;
+    }
+
+    function applyTrack3dView(track, animateCamera) {
+      if (!map3d) return;
+      if (compareActive) {
+        map3dTrackId = selectedTrackId;
+        map3d.resize();
+        const built = updateMap3dGeometry(track);
+        const bounds = new maplibregl.LngLatBounds();
+        let has = false;
+        for (const t of getCompareTracks()) {
+          const b = buildSelectedTrack3dLine(t);
+          if (!b?.path?.length) continue;
+          b.path.forEach((c) => { bounds.extend(c); has = true; });
+        }
+        if (!has && built?.path?.length) {
+          built.path.forEach((c) => bounds.extend(c));
+          has = true;
+        }
+        if (!has) return;
+        const cam = {
+          pitch: 60,
+          bearing: -20,
+          padding: { top: 72, bottom: 72, left: 56, right: 56 },
+          maxZoom: 17,
+          duration: animateCamera ? 800 : 0,
+        };
+        if (typeof map3d.fitBounds === "function") map3d.fitBounds(bounds, cam);
+        else map3d.easeTo({ center: bounds.getCenter(), pitch: 60, bearing: -20, duration: animateCamera ? 800 : 0 });
+        return;
+      }
+      if (!track) return;
+      map3dTrackId = track.id;
+      map3d.resize();
+      const built = updateMap3dGeometry(track);
+      if (!built?.path?.length) return;
+      const bounds = new maplibregl.LngLatBounds();
+      built.path.forEach((c) => bounds.extend(c));
+      const cam = {
+        pitch: 60,
+        bearing: -20,
+        padding: { top: 72, bottom: 72, left: 56, right: 56 },
+        // 允许拉近到可看清建筑；长轨仍会被 fitBounds 压低缩放
+        maxZoom: 17,
+        duration: animateCamera ? 800 : 0,
+      };
+      if (typeof map3d.fitBounds === "function") {
+        map3d.fitBounds(bounds, cam);
+      } else {
+        map3d.easeTo({
+          center: bounds.getCenter(),
+          pitch: 60,
+          bearing: -20,
+          duration: animateCamera ? 800 : 0,
+        });
+      }
+    }
+
+    function clearSelectedTrack3dGeometry() {
+      map3dPendingTrack = null;
+      map3dTrackId = null;
+      clearMap3dPopup();
+      clearSeriesPos3dMarker();
+      if (map3d && map3dReady) {
+        selectedTrack3dLineLayer?.clearTrack?.();
+        if (selectedTrack3dLineLayer) {
+          selectedTrack3dLineLayer.visible = false;
+          map3d.triggerRepaint();
+        }
+      }
+    }
+
+    /** 若当前为 3D 且有选中轨，刷新立体航迹；无选中则清空细管。不改变 3D/地形开关。 */
+    function syncSelectedTrackTo3d(opts = {}) {
+      if (!prefer3dView || !in3dMode) return;
+      if (compareActive) {
+        const tracks = getCompareTracks();
+        const focus = tracks.find((t) => t.id === selectedTrackId) || tracks[0] || null;
+        if (!focus) {
+          clearSelectedTrack3dGeometry();
+          syncMap3dOverlays();
+          return;
+        }
+        const m = ensureMap3d();
+        if (!m) return;
+        if (!map3dReady) {
+          map3dPendingTrack = focus;
+          showCompareTrackInfo(false);
+          return;
+        }
+        if (opts.easeToFocus && focus) {
+          map3dTrackId = focus.id;
+          const built = updateMap3dGeometry(focus);
+          if (built?.path?.length && opts.animateCamera !== false) {
+            const bounds = new maplibregl.LngLatBounds();
+            built.path.forEach((c) => bounds.extend(c));
+            map3d.fitBounds(bounds, {
+              pitch: 60,
+              bearing: -20,
+              padding: { top: 72, bottom: 72, left: 56, right: 56 },
+              maxZoom: 17,
+              duration: 600,
+            });
+          } else if (opts.animateCamera !== false) {
+            applyTrack3dView(focus, true);
+          } else {
+            updateMap3dGeometry(focus);
+          }
+        } else {
+          applyTrack3dView(focus, opts.animateCamera !== false);
+        }
+        syncMap3dOverlays();
+        showCompareTrackInfo(false);
+        return;
+      }
+      const t = selectedTrackId != null
+        ? MAP_DATA?.tracks?.find((x) => x.id === selectedTrackId)
+        : null;
+      if (!t) {
+        clearSelectedTrack3dGeometry();
+        syncMap3dOverlays();
+        return;
+      }
+      const m = ensureMap3d();
+      if (!m) return;
+      if (!map3dReady) {
+        map3dPendingTrack = t;
+        showMap3dTrackInfo(t, false);
+        return;
+      }
+      applyTrack3dView(t, opts.animateCamera !== false);
+      syncMap3dOverlays();
+      showMap3dTrackInfo(t, false);
+    }
+
+    function applyTerrainPreference() {
+      if (!map3d || !map3dReady) return;
+      ensureMap3dTerrain();
+      if (compareActive && in3dMode) {
+        const focus = getCompareTracks().find((t) => t.id === selectedTrackId) || getCompareTracks()[0];
+        if (focus) updateMap3dGeometry(focus);
+        return;
+      }
+      if (selectedTrackId != null && in3dMode) {
+        const t = MAP_DATA?.tracks?.find((x) => x.id === selectedTrackId);
+        if (t) updateMap3dGeometry(t);
+      }
+    }
+
+    function enter3dView() {
+      const wrap = document.querySelector(".map-wrap");
+      wrap?.classList.add("is-3d");
+      in3dMode = true;
+      const m = ensureMap3d();
+      if (!m) {
+        wrap?.classList.remove("is-3d");
+        in3dMode = false;
+        prefer3dView = false;
+        const cb = document.getElementById("layer-view-3d");
+        if (cb) cb.checked = false;
+        return;
+      }
+      const afterReady = () => {
+        applyTerrainPreference();
+        ensureMap3dBuildings();
+        syncMap3dOverlays();
+        syncSelectedTrackTo3d({ animateCamera: true });
+        requestAnimationFrame(() => map3d?.resize());
+      };
+      if (!map3dReady) {
+        map3d.once("load", afterReady);
+        requestAnimationFrame(() => map3d?.resize());
+        return;
+      }
+      afterReady();
+    }
+
+    function exit3dView() {
+      const wrap = document.querySelector(".map-wrap");
+      const hint = document.getElementById("map3d-hint");
+      if (hint) {
+        hint.hidden = true;
+        hint.textContent = "";
+      }
+      clearSelectedTrack3dGeometry();
+      if (!in3dMode && !wrap?.classList.contains("is-3d")) return;
+      in3dMode = false;
+      if (map3d && map3dReady) {
+        map3d.easeTo({ pitch: 0, bearing: 0, duration: 450 });
+        setTimeout(() => {
+          wrap?.classList.remove("is-3d");
+          if (map) map.invalidateSize();
+        }, 380);
+      } else {
+        wrap?.classList.remove("is-3d");
+        if (map) map.invalidateSize();
+      }
+    }
+
+    function set3dViewEnabled(on) {
+      prefer3dView = !!on;
+      const cb = document.getElementById("layer-view-3d");
+      if (cb) cb.checked = prefer3dView;
+      if (prefer3dView) enter3dView();
+      else exit3dView();
+    }
+
+    function setTerrainEnabled(on) {
+      preferTerrain = !!on;
+      const cb = document.getElementById("layer-terrain");
+      if (cb) cb.checked = preferTerrain;
+      if (in3dMode && map3dReady) applyTerrainPreference();
+    }
+
+    function enterTrack3d(track) {
+      // 兼容旧调用：仅在全局已开 3D 时同步几何
+      if (!prefer3dView || !track) return;
+      syncSelectedTrackTo3d({ animateCamera: true });
+    }
+
+    function exitTrack3d() {
+      // 兼容旧调用：只清选中几何，不关全局 3D
+      clearSelectedTrack3dGeometry();
+      if (in3dMode) syncMap3dOverlays();
+    }
+
+    function factoryColor(item) {
+      return FACTORY_COLORS[item.factory] || FACTORY_COLORS[item.factory_code] || FACTORY_COLORS["未知"];
+    }
+
+    function compareTrackColor(id) {
+      const ids = compareTrackIds;
+      const idx = ids.indexOf(id);
+      if (idx >= 0) return COMPARE_PALETTE[idx % COMPARE_PALETTE.length];
+      const t = MAP_DATA?.tracks?.find((x) => x.id === id);
+      return t ? factoryColor(t) : COMPARE_PALETTE[0];
+    }
+
+    function isCompareHighlighted(id) {
+      if (compareActive) return compareTrackIds.includes(id);
+      return false;
+    }
+
+    function getCompareTracks() {
+      if (!MAP_DATA?.tracks || !compareTrackIds.length) return [];
+      return compareTrackIds
+        .map((id) => MAP_DATA.tracks.find((x) => x.id === id))
+        .filter(Boolean);
+    }
+
+    function updateCompareActionButtons() {
+      const addBtn = document.getElementById("btn-add-compare");
+      const exitBtn = document.getElementById("btn-exit-compare");
+      const showAdd = selectedTrackId != null || compareActive || comparePickMode;
+      if (addBtn) {
+        addBtn.classList.toggle("visible", showAdd);
+        addBtn.classList.toggle("pick-active", comparePickMode);
+        if (compareActive) {
+          addBtn.textContent = "换对比轨";
+          addBtn.title = "保留当前对比中的第一条，再点另一条替换对比对象";
+          addBtn.disabled = false;
+        } else if (comparePickMode) {
+          addBtn.textContent = "取消选择";
+          addBtn.title = "取消待选对比轨";
+          addBtn.disabled = false;
+        } else {
+          addBtn.textContent = "加入对比";
+          addBtn.title = selectedTrackId != null
+            ? "再点另一条轨迹进行对比"
+            : "请先选中一条轨迹";
+          addBtn.disabled = selectedTrackId == null;
+        }
+      }
+      exitBtn?.classList.toggle("visible", compareActive);
+    }
+
+    function cancelComparePick() {
+      if (!comparePickMode) return;
+      comparePickMode = false;
+      updateCompareActionButtons();
+      renderTrackList();
+    }
+
+    /** 进入待选对比轨：对比中则为「换对比轨」（保留主焦点）。 */
+    function beginComparePick() {
+      if (selectedTrackId == null && !compareActive) return;
+      if (compareActive) {
+        exitCompare({ refresh: true, enterPick: true, animateCamera: false });
+        return;
+      }
+      comparePickMode = true;
+      updateCompareActionButtons();
+      renderTrackList();
+    }
+
+    function onAddCompareClick() {
+      if (comparePickMode) {
+        cancelComparePick();
+        return;
+      }
+      if (compareActive || selectedTrackId != null) beginComparePick();
+    }
+
+    function exitCompare(opts = {}) {
+      const wasActive = compareActive;
+      compareActive = false;
+      compareTrackIds = [];
+      comparePickMode = !!opts.enterPick && selectedTrackId != null;
+      updateCompareActionButtons();
+      const metricEl = document.getElementById("series-metric-toggles");
+      if (metricEl) metricEl.hidden = true;
+      document.getElementById("map3d-track-info")?.classList.remove("compare-mode");
+      clearSeriesPosExtraMarkers();
+      if (!wasActive && !opts.refresh && !opts.enterPick) return;
+      if (opts.refresh === false && !opts.enterPick) return;
+      if (selectedTrackId != null && MAP_DATA && !comparePickMode) {
+        const t = MAP_DATA.tracks.find((x) => x.id === selectedTrackId);
+        if (t) {
+          renderTrackSeriesChart(t);
+          showMap3dTrackInfo(t, false);
+          if (prefer3dView) syncSelectedTrackTo3d({ animateCamera: !!opts.animateCamera });
+        }
+      } else if (comparePickMode && selectedTrackId != null && MAP_DATA) {
+        const t = MAP_DATA.tracks.find((x) => x.id === selectedTrackId);
+        if (t) {
+          renderTrackSeriesChart(t);
+          showMap3dTrackInfo(t, false);
+          if (prefer3dView) syncSelectedTrackTo3d({ animateCamera: !!opts.animateCamera });
+        }
+      }
+      refreshLayers();
+      renderTrackList();
+    }
+
+    /** @param {number} partnerId 对比副轨；主轨为当前 selectedTrackId */
+    function startCompare(partnerId) {
+      const primary = selectedTrackId;
+      const partner = Number(partnerId);
+      if (primary == null || !Number.isFinite(partner) || partner === primary) return;
+      const visible = new Set(filteredTracks().map((t) => t.id));
+      if (!visible.has(primary) || !visible.has(partner)) {
+        comparePickMode = false;
+        updateCompareActionButtons();
+        return;
+      }
+      comparePickMode = false;
+      compareActive = true;
+      compareTrackIds = [primary, partner].slice(0, COMPARE_MAX);
+      soloTrackMode = false;
+      updateCompareActionButtons();
+      refreshLayers();
+      renderTrackList();
+      renderCompareSeriesChart();
+      showCompareTrackInfo();
+      scheduleFitCompareTracks();
+      if (prefer3dView) syncSelectedTrackTo3d({ animateCamera: true });
+      else clearSelectedTrack3dGeometry();
+      document.getElementById("section-map")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+
+    function pruneCompareAgainstFilters() {
+      if (comparePickMode && selectedTrackId != null) {
+        const visible = new Set(filteredTracks().map((t) => t.id));
+        if (!visible.has(selectedTrackId)) {
+          comparePickMode = false;
+        }
+      }
+      if (!compareActive) {
+        updateCompareActionButtons();
+        return;
+      }
+      const visible = new Set(filteredTracks().map((t) => t.id));
+      compareTrackIds = compareTrackIds.filter((id) => visible.has(id));
+      if (compareTrackIds.length < 2) {
+        exitCompare({ refresh: true });
+        return;
+      }
+      if (!compareTrackIds.includes(selectedTrackId)) {
+        selectedTrackId = compareTrackIds[0];
+      }
+      updateCompareActionButtons();
+      renderCompareSeriesChart();
+      showCompareTrackInfo();
+      if (prefer3dView) syncSelectedTrackTo3d({ animateCamera: false });
+    }
+
+    function setCompareMetric(metric) {
+      if (!["height", "speed", "distance"].includes(metric)) return;
+      compareMetric = metric;
+      document.querySelectorAll("#series-metric-toggles .filter-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.metric === metric);
+      });
+      if (compareActive) renderCompareSeriesChart();
+    }
+
+    /** 加深颜色，供 3D 航迹管使用。 */
+    function darkenHex(hex, factor = 0.72) {
+      const m = String(hex || "").trim().match(/^#?([0-9a-f]{6})$/i);
+      if (!m) return hex;
+      const n = parseInt(m[1], 16);
+      const mix = (c) => Math.max(0, Math.min(255, Math.round(c * factor)));
+      const r = mix((n >> 16) & 255);
+      const g = mix((n >> 8) & 255);
+      const b = mix(n & 255);
+      return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+    }
+
+    function css(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function setMapStatus(msg, isError = false) {
+      const el = document.getElementById("map-status");
+      if (!el) return;
+      el.textContent = msg;
+      el.style.color = isError ? "var(--negative, #F53F3F)" : "";
+    }
+
+    function renderFactoryFilters() {
+      initTrackFilters();
+    }
+
+    function chipFilters(containerId, options, activeKey, datasetKey, onSelect) {
+      const wrap = document.getElementById(containerId);
+      if (!wrap) return;
+      wrap.innerHTML =
+        `<button class="filter-btn active" data-${datasetKey}="all">全部</button>` +
+        options.map(v => `<button class="filter-btn" data-${datasetKey}="${v}">${v}</button>`).join("");
+      wrap.querySelectorAll(".filter-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          wrap.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          onSelect(btn.dataset[datasetKey]);
+        });
+      });
+    }
+
+    function formatRangeVal(v, decimals) {
+      return decimals > 0 ? Number(v).toFixed(decimals) : String(Math.round(Number(v)));
+    }
+
+    function updateRangeLabel(labelId, minV, maxV, decimals) {
+      const el = document.getElementById(labelId);
+      if (el) el.textContent = `${formatRangeVal(minV, decimals)} – ${formatRangeVal(maxV, decimals)}`;
+    }
+
+    function dayIndexToIso(dayIndex) {
+      const base = filterBounds?.date?.min || "2024-09-14";
+      const [y, m, d] = base.split("-").map(Number);
+      const dt = new Date(y, m - 1, d + Number(dayIndex));
+      const yy = dt.getFullYear();
+      const mm = String(dt.getMonth() + 1).padStart(2, "0");
+      const dd = String(dt.getDate()).padStart(2, "0");
+      return `${yy}-${mm}-${dd}`;
+    }
+
+    function isoToDayIndex(iso) {
+      if (!iso || iso.length < 10) return null;
+      const base = filterBounds?.date?.min || "2024-09-14";
+      const [y0, m0, d0] = base.split("-").map(Number);
+      const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+      const a = Date.UTC(y, m - 1, d);
+      const b = Date.UTC(y0, m0 - 1, d0);
+      return Math.round((a - b) / 86400000);
+    }
+
+    function updateDateRangeLabel(minDay, maxDay) {
+      const el = document.getElementById("filter-date-values");
+      if (el) el.textContent = `${dayIndexToIso(minDay)} – ${dayIndexToIso(maxDay)}`;
+    }
+
+    function trackStartDayIndex(t) {
+      const s = (t.start_time || "").slice(0, 10);
+      if (!s) return null;
+      return isoToDayIndex(s);
+    }
+
+    function updateRangeFill(minId, maxId, fillId) {
+      const minEl = document.getElementById(minId);
+      const maxEl = document.getElementById(maxId);
+      const fill = document.getElementById(fillId);
+      if (!minEl || !maxEl || !fill) return;
+      const lo = Number(minEl.min);
+      const hi = Number(minEl.max);
+      const minV = Number(minEl.value);
+      const maxV = Number(maxEl.value);
+      const span = hi - lo || 1;
+      fill.style.left = ((minV - lo) / span * 100) + "%";
+      fill.style.width = ((maxV - minV) / span * 100) + "%";
+    }
+
+    function configureRangeSlider(minId, maxId, labelId, fillId, bounds, step, decimals) {
+      const minEl = document.getElementById(minId);
+      const maxEl = document.getElementById(maxId);
+      if (!minEl || !maxEl) return;
+      minEl.min = maxEl.min = String(bounds.min);
+      minEl.max = maxEl.max = String(bounds.max);
+      minEl.step = maxEl.step = String(step);
+      minEl.value = String(bounds.min);
+      maxEl.value = String(bounds.max);
+      updateRangeLabel(labelId, bounds.min, bounds.max, decimals);
+      updateRangeFill(minId, maxId, fillId);
+    }
+
+    function readRangeSlider(minId, maxId) {
+      const minEl = document.getElementById(minId);
+      const maxEl = document.getElementById(maxId);
+      return { min: Number(minEl.value), max: Number(maxEl.value) };
+    }
+
+    function bindRangeFilterInputs() {
+      if (rangeFiltersBound) return;
+      rangeFiltersBound = true;
+      const specs = [
+        ["filter-date-min", "filter-date-max", "filter-date-values", "filter-date-fill", "date"],
+        ["filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", 0],
+        ["filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", 1],
+        ["filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", 0],
+        ["filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", 0],
+      ];
+      specs.forEach(([minId, maxId, labelId, fillId, decimalsOrDate]) => {
+        const minEl = document.getElementById(minId);
+        const maxEl = document.getElementById(maxId);
+        if (!minEl || !maxEl) return;
+        const onSlide = (changed) => {
+          let minV = Number(minEl.value);
+          let maxV = Number(maxEl.value);
+          if (minV > maxV) {
+            if (changed === "min") maxEl.value = String(minV);
+            else minEl.value = String(maxV);
+            minV = Number(minEl.value);
+            maxV = Number(maxEl.value);
+          }
+          if (decimalsOrDate === "date") updateDateRangeLabel(minV, maxV);
+          else updateRangeLabel(labelId, minV, maxV, decimalsOrDate);
+          updateRangeFill(minId, maxId, fillId);
+          scheduleApplyTrackFilters();
+        };
+        minEl.addEventListener("input", () => onSlide("min"));
+        maxEl.addEventListener("input", () => onSlide("max"));
+      });
+    }
+
+    function scheduleApplyTrackFilters() {
+      if (filterApplyTimer != null) clearTimeout(filterApplyTimer);
+      filterApplyTimer = setTimeout(() => {
+        filterApplyTimer = null;
+        applyTrackFilters();
+      }, 120);
+    }
+
+    function initTrackFilters() {
+      filterBounds = MAP_DATA.meta.filter_bounds;
+      if (!filterBounds) return;
+
+      chipFilters("factory-filters", filterBounds.factories || [], trackFilters.factory, "f", v => {
+        trackFilters.factory = v;
+        applyTrackFilters();
+      });
+      chipFilters("flytype-filters", filterBounds.fly_types || [], trackFilters.flyType, "t", v => {
+        trackFilters.flyType = v;
+        applyTrackFilters();
+      });
+
+      const b = filterBounds;
+      if (b.date) {
+        configureRangeSlider(
+          "filter-date-min", "filter-date-max", "filter-date-values", "filter-date-fill",
+          { min: b.date.day_min, max: b.date.day_max }, 1, 0,
+        );
+        updateDateRangeLabel(b.date.day_min, b.date.day_max);
+      }
+      configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 0.1, 1);
+      configureRangeSlider("filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", b.distance_km, 0.1, 1);
+      configureRangeSlider("filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", b.height_m, 1, 0);
+      configureRangeSlider("filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", b.speed_kmh, 1, 0);
+      bindRangeFilterInputs();
+
+      syncFilterStateFromInputs();
+      updateFilterCountBadge();
+    }
+
+    function syncFilterStateFromInputs() {
+      const dateR = readRangeSlider("filter-date-min", "filter-date-max");
+      const dur = readRangeSlider("filter-duration-min", "filter-duration-max");
+      const dist = readRangeSlider("filter-distance-min", "filter-distance-max");
+      const h = readRangeSlider("filter-height-min", "filter-height-max");
+      const spd = readRangeSlider("filter-speed-min", "filter-speed-max");
+      trackFilters.dateMin = dateR.min;
+      trackFilters.dateMax = dateR.max;
+      trackFilters.durationMin = dur.min;
+      trackFilters.durationMax = dur.max;
+      trackFilters.distanceMin = dist.min;
+      trackFilters.distanceMax = dist.max;
+      trackFilters.heightMin = h.min;
+      trackFilters.heightMax = h.max;
+      trackFilters.speedMin = spd.min;
+      trackFilters.speedMax = spd.max;
+    }
+
+    function resetTrackFilters() {
+      if (!filterBounds) return;
+      trackFilters.factory = "all";
+      trackFilters.flyType = "all";
+      document.querySelectorAll("#factory-filters .filter-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.f === "all");
+      });
+      document.querySelectorAll("#flytype-filters .filter-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.t === "all");
+      });
+
+      const b = filterBounds;
+      if (b.date) {
+        configureRangeSlider(
+          "filter-date-min", "filter-date-max", "filter-date-values", "filter-date-fill",
+          { min: b.date.day_min, max: b.date.day_max }, 1, 0,
+        );
+        updateDateRangeLabel(b.date.day_min, b.date.day_max);
+      }
+      configureRangeSlider("filter-duration-min", "filter-duration-max", "filter-duration-values", "filter-duration-fill", b.duration_min, 0.1, 1);
+      configureRangeSlider("filter-distance-min", "filter-distance-max", "filter-distance-values", "filter-distance-fill", b.distance_km, 0.1, 1);
+      configureRangeSlider("filter-height-min", "filter-height-max", "filter-height-values", "filter-height-fill", b.height_m, 1, 0);
+      configureRangeSlider("filter-speed-min", "filter-speed-max", "filter-speed-values", "filter-speed-fill", b.speed_kmh, 1, 0);
+      syncFilterStateFromInputs();
+      applyTrackFilters();
+    }
+
+    function applyTrackFilters() {
+      syncFilterStateFromInputs();
+      // 选中轨若不在筛选结果中：取消选中并关时序；仍在结果中则保留 solo
+      let clearedSelection = false;
+      if (selectedTrackId !== null) {
+        const stillVisible = filteredTracks().some(t => t.id === selectedTrackId);
+        if (!stillVisible) {
+          selectedTrackId = null;
+          hoverTrackId = null;
+          soloTrackMode = false;
+          hideTrackSeriesPanel();
+          hideMap3dTrackInfo();
+          clearSeriesPosMarker();
+          clearedSelection = true;
+        }
+      }
+      pruneCompareAgainstFilters();
+      updateFilterCountBadge();
+      updateFilterStatus();
+      renderTrackList();
+      refreshLayers();
+      if (clearedSelection && !compareActive) {
+        clearSelectedTrack3dGeometry();
+        if (in3dMode) syncMap3dOverlays();
+        setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+      } else if (compareActive && prefer3dView) {
+        syncSelectedTrackTo3d({ animateCamera: false });
+      }
+    }
+
+    function updateFilterStatus() {
+      const chipsEl = document.getElementById("filter-status-chips");
+      const textEl = document.getElementById("filter-status-text");
+      if (!chipsEl || !textEl || !filterBounds) return;
+      const chips = [];
+      if (trackFilters.factory !== "all") chips.push(trackFilters.factory);
+      if (trackFilters.flyType !== "all") chips.push(trackFilters.flyType);
+      const b = filterBounds;
+      if (b.date && (trackFilters.dateMin > b.date.day_min || trackFilters.dateMax < b.date.day_max)) {
+        chips.push(`${dayIndexToIso(trackFilters.dateMin)}～${dayIndexToIso(trackFilters.dateMax)}`);
+        const noStart = filteredTracks().filter(t => !(t.start_time || "").trim()).length;
+        if (noStart > 0) chips.push(`含 ${noStart} 条无起飞时间`);
+      }
+      if (trackFilters.durationMin > b.duration_min.min || trackFilters.durationMax < b.duration_min.max) {
+        chips.push(`时长 ${formatRangeVal(trackFilters.durationMin, 0)}–${formatRangeVal(trackFilters.durationMax, 0)} 分`);
+      }
+      if (trackFilters.distanceMin > b.distance_km.min || trackFilters.distanceMax < b.distance_km.max) {
+        chips.push(`距离 ${formatRangeVal(trackFilters.distanceMin, 1)}–${formatRangeVal(trackFilters.distanceMax, 1)} km`);
+      }
+      if (trackFilters.heightMin > b.height_m.min || trackFilters.heightMax < b.height_m.max) {
+        chips.push(`高度 ${formatRangeVal(trackFilters.heightMin, 0)}–${formatRangeVal(trackFilters.heightMax, 0)} m`);
+      }
+      if (trackFilters.speedMin > b.speed_kmh.min || trackFilters.speedMax < b.speed_kmh.max) {
+        chips.push(`速度 ${formatRangeVal(trackFilters.speedMin, 0)}–${formatRangeVal(trackFilters.speedMax, 0)} km/h`);
+      }
+      if (document.getElementById("layer-region-only")?.checked) chips.push("仅行政区内");
+      const n = filteredTracks().length;
+      textEl.textContent = chips.length ? `当前条件 · 共 ${n} 条轨迹` : `未限制维度 · 共 ${n} 条轨迹`;
+      chipsEl.innerHTML = chips.map(c => `<span class="filter-chip">${c}</span>`).join("");
+    }
+
+    function updateFilterCountBadge() {
+      const badge = document.getElementById("filter-count-badge");
+      const listBadge = document.getElementById("list-count-badge");
+      if (!MAP_DATA) return;
+      const n = filteredTracks().length;
+      const total = MAP_DATA.tracks.length;
+      const label = `${n} / ${total}`;
+      if (badge) badge.textContent = label;
+      if (listBadge) listBadge.textContent = label;
+    }
+
+    function sortTracks(tracks) {
+      const arr = [...tracks];
+      if (trackSortKey === "duration") {
+        arr.sort((a, b) => (b.duration_min || 0) - (a.duration_min || 0));
+      } else if (trackSortKey === "distance") {
+        arr.sort((a, b) => (b.distance_m || 0) - (a.distance_m || 0));
+      } else {
+        arr.sort((a, b) => b.point_count - a.point_count);
+      }
+      return arr;
+    }
+
+    function trackMatchesSearch(t, q) {
+      const fields = [
+        String(t.id),
+        t.task_name || "",
+        t.airport_name || "",
+        t.dock_sn || "",
+        t.mission_id != null ? String(t.mission_id) : "",
+        t.uav_sn || "",
+      ];
+      return fields.some(f => f.toLowerCase().includes(q));
+    }
+
+    function listTracksForDisplay() {
+      let tracks = sortTracks(filteredTracks());
+      if (trackSearchQuery.trim()) {
+        const q = trackSearchQuery.trim().toLowerCase();
+        tracks = tracks.filter(t => trackMatchesSearch(t, q));
+      }
+      return tracks;
+    }
+
+    function shouldShowTrack(t) {
+      if (!matchTrackFilters(t) || !matchRegion(t)) return false;
+      if (soloTrackMode && selectedTrackId !== null) return t.id === selectedTrackId;
+      return true;
+    }
+
+    /* ========================================================================
+     * 时序抽屉（docked/visible 开合、Chart.js、播放插值、2D/3D 位置标点）
+     * ======================================================================== */
+
+    function isTrackSeriesPanelVisible() {
+      return !!document.getElementById("track-series-panel")?.classList.contains("visible");
+    }
+
+    function isTrackSeriesPanelDocked() {
+      return !!document.getElementById("track-series-panel")?.classList.contains("docked");
+    }
+
+    function syncSeriesPanelActions() {
+      const showBtn = document.getElementById("btn-show-series");
+      const toggleBtn = document.getElementById("btn-toggle-series");
+      const panel = document.getElementById("track-series-panel");
+      const panelOpen = isTrackSeriesPanelVisible();
+      const docked = isTrackSeriesPanelDocked();
+      const hasFocus = selectedTrackId != null || compareActive;
+      showBtn?.classList.toggle("visible", hasFocus && !docked && !panelOpen);
+      if (toggleBtn) {
+        toggleBtn.setAttribute("aria-expanded", panelOpen ? "true" : "false");
+        const label = panelOpen ? "收起时序图" : "展开时序图";
+        toggleBtn.title = label;
+        toggleBtn.setAttribute("aria-label", label);
+      }
+      if (panel) panel.setAttribute("aria-hidden", docked ? "false" : "true");
+    }
+
+    /** 抽屉开合过程中持续刷新地图/图表尺寸，避免灰边或拉伸。 */
+    function pulseMapLayoutDuringSeriesAnim(durationMs = 400) {
+      const t0 = performance.now();
+      const tick = (now) => {
+        trackSeriesChart?.resize();
+        if (map) map.invalidateSize({ animate: false });
+        if (map3d) map3d.resize();
+        if (now - t0 < durationMs) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+
+    function seriesDrawerTransitionProp(name) {
+      return !name || name === "height" || name === "max-height" || name === "min-height" || name === "padding";
+    }
+
+    function afterSeriesDrawerLayoutSettle(panel, cb) {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        panel?.removeEventListener("transitionend", onEnd);
+        cb?.();
+      };
+      const onEnd = (e) => {
+        if (!panel || e.target !== panel || !seriesDrawerTransitionProp(e.propertyName)) return;
+        finish();
+      };
+      panel?.addEventListener("transitionend", onEnd);
+      setTimeout(finish, 420);
+    }
+
+    /**
+     * 展开底部时序抽屉（docked + visible），为 Chart 腾出高度并收缩地图区。
+     * 副作用：改 panel class、syncSeriesPanelActions；动画期 pulseMapLayoutDuringSeriesAnim；
+     *         布局稳定后 invalidateSize/resize 并调用 opts.onOpened。
+     */
+    function openTrackSeriesDrawer(opts = {}) {
+      const panel = document.getElementById("track-series-panel");
+      if (!panel) return;
+      const already = panel.classList.contains("visible") && panel.classList.contains("docked");
+      panel.classList.add("docked", "visible");
+      syncSeriesPanelActions();
+      const afterOpen = () => {
+        trackSeriesChart?.resize();
+        if (map) map.invalidateSize({ animate: false });
+        if (map3d) map3d.resize();
+        opts.onOpened?.();
+      };
+      if (already) {
+        requestAnimationFrame(afterOpen);
+        return;
+      }
+      pulseMapLayoutDuringSeriesAnim(400);
+      afterSeriesDrawerLayoutSettle(panel, afterOpen);
+    }
+
+    /**
+     * 收起为仅箭头条（仍 docked，保留选中态与 Chart 实例）。
+     * 副作用：移除 visible；地图区高度复原；不销毁 trackSeriesChart。
+     */
+    function collapseTrackSeriesDrawer(opts = {}) {
+      const panel = document.getElementById("track-series-panel");
+      if (!panel) {
+        opts.onClosed?.();
+        return;
+      }
+      if (panel.classList.contains("docked") && !panel.classList.contains("visible")) {
+        syncSeriesPanelActions();
+        opts.onClosed?.();
+        return;
+      }
+      panel.classList.add("docked");
+      panel.classList.remove("visible");
+      syncSeriesPanelActions();
+      pulseMapLayoutDuringSeriesAnim(400);
+      afterSeriesDrawerLayoutSettle(panel, () => {
+        if (map) map.invalidateSize({ animate: false });
+        if (map3d) map3d.resize();
+        opts.onClosed?.();
+      });
+    }
+
+    /**
+     * 完全卸下抽屉（clearTrackSelection / hideTrackSeriesPanel 时）。
+     * 副作用：移除 docked + visible；地图恢复全高；回调 opts.onClosed。
+     */
+    function undockTrackSeriesDrawer(opts = {}) {
+      const panel = document.getElementById("track-series-panel");
+      if (!panel) {
+        opts.onClosed?.();
+        return;
+      }
+      const wasShowing = panel.classList.contains("docked");
+      panel.classList.remove("visible", "docked");
+      syncSeriesPanelActions();
+      if (!wasShowing) {
+        opts.onClosed?.();
+        return;
+      }
+      pulseMapLayoutDuringSeriesAnim(400);
+      afterSeriesDrawerLayoutSettle(panel, () => {
+        if (map) map.invalidateSize({ animate: false });
+        if (map3d) map3d.resize();
+        opts.onClosed?.();
+      });
+    }
+
+    /** @deprecated 兼容旧调用 → 收起为箭头条 */
+    function closeTrackSeriesDrawer(opts = {}) {
+      collapseTrackSeriesDrawer(opts);
+    }
+
+    function updateTrackListMeta() {
+      const meta = document.getElementById("track-list-meta");
+      const soloBtn = document.getElementById("btn-solo-track");
+      const clearBtn = document.getElementById("btn-clear-selection");
+      if (!meta) return;
+      if (compareActive) {
+        meta.textContent = `对比中 ${compareTrackIds.length} 条 · #${compareTrackIds.join(" / #")}`;
+        soloBtn?.classList.remove("visible");
+        clearBtn?.classList.add("visible");
+      } else if (comparePickMode && selectedTrackId != null) {
+        meta.textContent = `待选对比轨 · 已选 #${selectedTrackId} · 再点另一条`;
+        soloBtn?.classList.remove("visible");
+        clearBtn?.classList.add("visible");
+      } else if (selectedTrackId !== null) {
+        meta.textContent = soloTrackMode
+          ? `仅显示 #${selectedTrackId}`
+          : `已选中 #${selectedTrackId} · 点「加入对比」再选另一条`;
+        soloBtn?.classList.toggle("visible", !soloTrackMode);
+        clearBtn?.classList.add("visible");
+      } else {
+        const shown = listTracksForDisplay().length;
+        const total = filteredTracks().length;
+        meta.textContent = shown === total
+          ? `共 ${total} 条 · 点击选中`
+          : `显示 ${shown} / ${total} 条 · 点击选中`;
+        soloBtn?.classList.remove("visible");
+        clearBtn?.classList.remove("visible");
+      }
+      updateCompareActionButtons();
+      syncSeriesPanelActions();
+    }
+
+    /** 仅收起时序抽屉（保留选中与图表实例），底部箭头可再展开。 */
+    function dismissTrackSeriesPanel() {
+      stopSeriesPlay();
+      seriesPlay.cursorVisible = false;
+      seriesPlay.lastTipIdx = -1;
+      clearSeriesPosMarker();
+      const cursor = document.getElementById("series-play-cursor");
+      if (cursor) cursor.hidden = true;
+      collapseTrackSeriesDrawer();
+    }
+
+    function toggleTrackSeriesDrawer() {
+      if (selectedTrackId == null && !compareActive) return;
+      if (isTrackSeriesPanelVisible()) {
+        dismissTrackSeriesPanel();
+        return;
+      }
+      reopenTrackSeriesPanel();
+    }
+
+    /** 在仍选中某轨时重新打开时序抽屉。 */
+    function reopenTrackSeriesPanel() {
+      if (compareActive) {
+        renderCompareSeriesChart();
+        return;
+      }
+      if (selectedTrackId == null || !MAP_DATA) return;
+      const t = MAP_DATA.tracks.find((x) => x.id === selectedTrackId);
+      if (!t) return;
+      renderTrackSeriesChart(t);
+    }
+
+    function renderTrackList() {
+      const list = document.getElementById("track-list");
+      const tracks = listTracksForDisplay();
+      updateTrackListMeta();
+      if (!tracks.length) {
+        list.innerHTML = `<div class="track-item" style="cursor:default;color:var(--muted);display:block">无匹配轨迹，请放宽筛选或搜索条件</div>`;
+        return;
+      }
+      list.innerHTML = tracks.map(t => {
+        const title = `#${t.id} · ${t.point_count} 点${t.task_name ? " · " + t.task_name : ""}`;
+        const parts = [
+          t.factory || "未知",
+          t.fly_type || "—",
+          t.duration_min != null ? `${t.duration_min} 分钟` : null,
+          t.distance_m != null ? `${(t.distance_m / 1000).toFixed(1)} km` : null,
+        ].filter(Boolean);
+        const meta = parts.join(" · ");
+        const active = (!compareActive && selectedTrackId === t.id) ? " active" : "";
+        const compareRow = compareActive && compareTrackIds.includes(t.id) ? " compare-active-row" : "";
+        const pickTarget = comparePickMode && selectedTrackId !== t.id ? " compare-pick-target" : "";
+        const swatch = compareActive && compareTrackIds.includes(t.id)
+          ? compareTrackColor(t.id)
+          : "";
+        return `<div class="track-item${active}${compareRow}${pickTarget}" data-id="${t.id}"${swatch ? ` style="--compare-swatch:${swatch}"` : ""}>
+          <span class="track-item-title">${title}</span>
+          <span class="track-item-meta">${meta || t.start_time || "—"}</span>
+        </div>`;
+      }).join("");
+      list.querySelectorAll(".track-item[data-id]").forEach(el => {
+        const id = Number(el.dataset.id);
+        el.addEventListener("click", () => focusTrack(id));
+        el.addEventListener("mouseenter", () => setHoverTrack(id));
+        el.addEventListener("mouseleave", () => setHoverTrack(null));
+      });
+    }
+
+    function trackLineStyle(t) {
+      const factory = t.has_record ? factoryColor(t) : "#95A5A6";
+      const isCompare = isCompareHighlighted(t.id);
+      const isSelected = selectedTrackId === t.id || isCompare;
+      const isHover = hoverTrackId === t.id;
+      const dimOthers = (
+        (compareActive && !isCompare && !isHover) ||
+        (!compareActive && selectedTrackId !== null && !soloTrackMode && !isSelected && !isHover)
+      );
+      let weight = 2;
+      let opacity = 0.22;
+      let color = factory;
+      if (isCompare) {
+        opacity = 1;
+        color = compareTrackColor(t.id);
+      } else if (isSelected || isHover) {
+        opacity = 1;
+        color = factory;
+      } else if (dimOthers) {
+        color = "#94A3B8";
+        opacity = 0.12;
+      }
+      return { color, weight, opacity, isSelected, isHover, dimOthers, isCompare };
+    }
+
+    function getTrackLineEntry(id) {
+      const entry = trackPolylines.get(id);
+      if (!entry) return null;
+      if (entry.line) return entry;
+      return { line: entry, hit: null };
+    }
+
+    function bindTrackInteractions(layer, trackId) {
+      layer.on("click", () => focusTrack(trackId));
+      layer.on("mouseover", () => {
+        setHoverTrack(trackId);
+        if (map) map.getContainer().style.cursor = "pointer";
+      });
+      layer.on("mouseout", () => {
+        setHoverTrack(null);
+        if (map) map.getContainer().style.cursor = "";
+      });
+    }
+
+    function applyTrackPolylineStyle(id) {
+      const entry = getTrackLineEntry(id);
+      const t = MAP_DATA?.tracks.find(x => x.id === id);
+      if (!entry?.line || !t) return;
+      const style = trackLineStyle(t);
+      entry.line.setStyle({
+        color: style.color,
+        weight: style.weight,
+        opacity: style.opacity,
+      });
+      if (entry.hit) {
+        entry.hit.setStyle({
+          color: style.color,
+          weight: TRACK_HIT_WEIGHT,
+          opacity: 0,
+        });
+      }
+      if (style.isSelected || style.isHover) {
+        entry.line.bringToFront();
+        entry.hit?.bringToFront();
+      }
+    }
+
+    function setHoverTrack(id) {
+      const prev = hoverTrackId;
+      if (prev === id) return;
+      hoverTrackId = id;
+      if (prev != null) applyTrackPolylineStyle(prev);
+      if (id != null) applyTrackPolylineStyle(id);
+      applyMap3dTrackHover(id);
+      document.querySelectorAll(".track-item[data-id]").forEach(el => {
+        el.classList.toggle("hovering", Number(el.dataset.id) === id);
+      });
+    }
+
+    function inNumericRange(value, min, max) {
+      if (value == null || Number.isNaN(value)) return true;
+      if (min != null && value < min) return false;
+      if (max != null && value > max) return false;
+      return true;
+    }
+
+    function matchTrackFilters(t) {
+      if (trackFilters.factory !== "all" && t.factory !== trackFilters.factory) return false;
+      if (trackFilters.flyType !== "all" && t.fly_type !== trackFilters.flyType) return false;
+      // 无起飞时间不排除（与其它空字段口径一致）
+      if (!inNumericRange(trackStartDayIndex(t), trackFilters.dateMin, trackFilters.dateMax)) return false;
+      if (!inNumericRange(t.duration_min, trackFilters.durationMin, trackFilters.durationMax)) return false;
+      const distKm = t.distance_m != null ? t.distance_m / 1000 : null;
+      if (!inNumericRange(distKm, trackFilters.distanceMin, trackFilters.distanceMax)) return false;
+      if (!inNumericRange(t.max_height_m, trackFilters.heightMin, trackFilters.heightMax)) return false;
+      if (!inNumericRange(t.max_speed_kmh, trackFilters.speedMin, trackFilters.speedMax)) return false;
+      return true;
+    }
+
+    function filteredTracks() {
+      return MAP_DATA.tracks.filter(t => matchTrackFilters(t) && matchRegion(t));
+    }
+
+    function airportPopup(a) {
+      return `<b>${a.name}</b><br>
+        厂商：${a.factory}<br>
+        设备 SN：${a.device_sn}<br>
+        坐标：${a.longitude}, ${a.latitude}<br>
+        覆盖半径：${a.radius_m} m<br>
+        ${a.height != null ? "海拔：" + a.height + " m<br>" : ""}
+        关联飞行：${a.flight_count} 次<br>
+        ${a.department ? "部门：" + a.department + "<br>" : ""}
+        ${a.firmware_version ? "固件：" + a.firmware_version : ""}`;
+    }
+
+    function matchFactory(item) {
+      if (trackFilters.factory === "all") return true;
+      return item.factory === trackFilters.factory;
+    }
+
+    function matchRegion(t) {
+      if (!document.getElementById("layer-region-only")?.checked) return true;
+      return (t.in_district_ratio ?? 0) >= 0.5;
+    }
+
+    function fitDefaultView() {
+      const view = MAP_DATA.meta.default_view || MAP_DATA.meta.bounds;
+      const maxZoom = view.max_zoom || 12;
+      map.fitBounds([view.southwest, view.northeast], { padding: [28, 28], maxZoom });
+      if (in3dMode && map3d && map3dTrackId != null && MAP_DATA) {
+        const t = MAP_DATA.tracks.find((x) => x.id === map3dTrackId);
+        if (t) {
+          applyTrack3dView(t, true);
+          return;
+        }
+      }
+      if (in3dMode && map3d) {
+        // meta 为 Leaflet [lat,lon]；MapLibre 要 [lon,lat]
+        const sw = view.southwest;
+        const ne = view.northeast;
+        const cam = {
+          pitch: 60,
+          bearing: -20,
+          padding: { top: 72, bottom: 72, left: 56, right: 56 },
+          maxZoom: 17,
+          duration: 800,
+        };
+        if (typeof map3d.fitBounds === "function") {
+          map3d.fitBounds(
+            [
+              [sw[1], sw[0]],
+              [ne[1], ne[0]],
+            ],
+            cam
+          );
+        } else {
+          map3d.easeTo({ pitch: 60, bearing: -20, duration: 800 });
+        }
+      }
+    }
+
+    function initMap() {
+      map = L.map("map", { zoomControl: true });
+      applyBasemap(document.documentElement.dataset.theme);
+      fitDefaultView();
+
+      // 自下而上：机场 → 覆盖 → 行政区划（倒数第二）→ 轨迹（最上层，便于点选）
+      airportLayer = L.layerGroup().addTo(map);
+      coverageLayer = L.layerGroup().addTo(map);
+      districtLayer = L.layerGroup().addTo(map);
+      trackLayer = L.layerGroup().addTo(map);
+      refreshLayers();
+      setTimeout(() => map.invalidateSize(), 0);
+    }
+
+    window.addEventListener("resize", () => {
+      if (map) map.invalidateSize();
+      if (map3d) map3d.resize();
+    });
+
+    function refreshDistrictLayer() {
+      if (!districtLayer) return;
+      districtLayer.clearLayers();
+      if (!document.getElementById("layer-district")?.checked) return;
+      const geo = MAP_DATA.meta.district_boundary;
+      if (!geo) return;
+      L.geoJSON(geo, {
+        style: {
+          color: "#E67E22",
+          weight: 2,
+          fillColor: "#E67E22",
+          fillOpacity: 0.06,
+        },
+      }).bindPopup(
+        `<b>${MAP_DATA.meta.district_name || "越城区"}</b><br>看板「行政内」KPI 按此行政区划面统计`,
+      ).addTo(districtLayer);
+    }
+
+    /**
+     * 重建 Leaflet 机场/覆盖/区划/轨迹图层，并 syncMap3dOverlays 同步 3D 叠层。
+     * 口径：轨迹折线优先 series.lon/lat（与时序标点同源）；缺 series 时回退 t.coords。
+     *       可见性由 shouldShowTrack + 图层 checkbox 决定；命中层 hit 透明加宽。
+     * 副作用：清空 trackLayer/trackPolylines 后全量重绘；不改动选中 id。
+     */
+    function refreshLayers() {
+      airportLayer.clearLayers();
+      coverageLayer.clearLayers();
+      trackLayer.clearLayers();
+      trackPolylines.clear();
+
+      const showAirports = document.getElementById("layer-airports").checked;
+      const showCoverage = document.getElementById("layer-coverage").checked;
+      const showTracks = document.getElementById("layer-tracks").checked;
+
+      if (showAirports) {
+        MAP_DATA.airports.forEach(a => {
+          if (!matchFactory(a)) return;
+          const color = factoryColor(a);
+          L.circleMarker([a.latitude, a.longitude], {
+            radius: 7, color: "#fff", weight: 1.5,
+            fillColor: color, fillOpacity: 0.92,
+          }).bindPopup(airportPopup(a)).addTo(airportLayer);
+        });
+      }
+
+      if (showCoverage) {
+        MAP_DATA.airports.forEach(a => {
+          if (!matchFactory(a)) return;
+          const color = factoryColor(a);
+          L.circle([a.latitude, a.longitude], {
+            radius: a.radius_m,
+            color, weight: 1, fillColor: color, fillOpacity: 0.06,
+            dashArray: "4 6",
+          }).bindPopup(`<b>${a.name}</b><br>覆盖半径 ${(a.radius_m / 1000).toFixed(1)} km`).addTo(coverageLayer);
+        });
+      }
+
+      refreshDistrictLayer();
+
+      if (showTracks) {
+        MAP_DATA.tracks.forEach(t => {
+          if (!shouldShowTrack(t)) return;
+          // 有时序 lon/lat 时与标点同源，避免 coords 抽稀与 series 不一致导致「点不在线上」
+          const series = t.series;
+          let latlngs;
+          if (series?.lon?.length && series?.lat?.length) {
+            const n = Math.min(series.lon.length, series.lat.length);
+            latlngs = [];
+            for (let i = 0; i < n; i++) {
+              const lon = series.lon[i];
+              const lat = series.lat[i];
+              if (lon == null || lat == null || !Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+              latlngs.push([lat, lon]);
+            }
+          }
+          if (!latlngs?.length) {
+            latlngs = t.coords.map(c => [c[1], c[0]]);
+          }
+          if (latlngs.length < 2) return;
+          const style = trackLineStyle(t);
+          const line = L.polyline(latlngs, {
+            color: style.color,
+            weight: style.weight,
+            opacity: style.opacity,
+            interactive: false,
+          });
+          // 透明加宽命中层：扩大点选 / 悬停判定范围（详情在右上角卡，不再用 Leaflet 弹窗）
+          const hit = L.polyline(latlngs, {
+            color: style.color,
+            weight: TRACK_HIT_WEIGHT,
+            opacity: 0,
+            fillOpacity: 0,
+            interactive: true,
+            bubblingMouseEvents: false,
+            className: "track-hit-line",
+          });
+          bindTrackInteractions(hit, t.id);
+          line.addTo(trackLayer);
+          hit.addTo(trackLayer);
+          trackPolylines.set(t.id, { line, hit });
+          if (style.isSelected || style.isHover) {
+            line.bringToFront();
+            hit.bringToFront();
+          }
+          const endpointStrong = style.isSelected || style.isHover;
+          L.circleMarker(latlngs[0], {
+            radius: 4,
+            color: "#fff",
+            weight: 1,
+            fillColor: style.color,
+            fillOpacity: endpointStrong ? 1 : (style.dimOthers ? 0.12 : 0.35),
+          }).addTo(trackLayer);
+          if (latlngs.length > 1) {
+            L.circleMarker(latlngs[latlngs.length - 1], {
+              radius: 3,
+              color: "#fff",
+              weight: 1,
+              fillColor: style.color,
+              fillOpacity: endpointStrong ? 0.85 : (style.dimOthers ? 0.1 : 0.3),
+            }).addTo(trackLayer);
+          }
+        });
+      }
+      syncMap3dOverlays();
+    }
+
+    function seriesPointLatLng(track, dataIndex) {
+      const series = track?.series;
+      if (!series || dataIndex == null || dataIndex < 0) return null;
+      const lat = series.lat?.[dataIndex];
+      const lon = series.lon?.[dataIndex];
+      if (lat != null && lon != null && Number.isFinite(lat) && Number.isFinite(lon)) {
+        return [lat, lon];
+      }
+      const coords = track.coords;
+      if (!coords?.length || !series.t_min?.length) return null;
+      const n = series.t_min.length;
+      const ratio = n <= 1 ? 0 : dataIndex / (n - 1);
+      const ci = Math.round(ratio * (coords.length - 1));
+      const c = coords[Math.max(0, Math.min(coords.length - 1, ci))];
+      if (!c || c.length < 2) return null;
+      return [c[1], c[0]];
+    }
+
+    function lerpNum(a, b, u) {
+      const na = Number(a);
+      const nb = Number(b);
+      const fa = Number.isFinite(na);
+      const fb = Number.isFinite(nb);
+      if (!fa && !fb) return null;
+      if (!fa) return nb;
+      if (!fb) return na;
+      return na + (nb - na) * u;
+    }
+
+    function seriesPlayTMax(track) {
+      const arr = track?.series?.t_min;
+      if (!arr?.length) return 0;
+      for (let i = arr.length - 1; i >= 0; i--) {
+        if (arr[i] != null && Number.isFinite(Number(arr[i]))) return Number(arr[i]);
+      }
+      return 0;
+    }
+
+    /** 最后一个 t_min <= tMin 的下标。 */
+    function seriesIndexAtTime(track, tMin) {
+      const arr = track?.series?.t_min;
+      if (!arr?.length) return 0;
+      let lo = 0;
+      let hi = arr.length - 1;
+      if (tMin <= Number(arr[0] ?? 0)) return 0;
+      if (tMin >= Number(arr[hi] ?? 0)) return hi;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        const v = Number(arr[mid]);
+        if (v <= tMin) lo = mid;
+        else hi = mid - 1;
+      }
+      return lo;
+    }
+
+    /**
+     * 按 t_min 在相邻采样点间连续插值位置与标量（高度/速度/距离/elevation）。
+     * 口径：位置经 seriesPointLatLng（优先 series lon/lat，否则 coords 比例回退）；
+     *       标量在 [i0,i1] 上线性 lerp；返回 i0/i1/u 供播放游标与标注节流。
+     * 副作用：无。
+     */
+    function seriesInterpAtTime(track, tMin) {
+      const series = track?.series;
+      const arr = series?.t_min;
+      if (!arr?.length) return null;
+      const n = arr.length;
+      let i0 = seriesIndexAtTime(track, tMin);
+      if (i0 >= n - 1) {
+        i0 = n - 1;
+        const ll = seriesPointLatLng(track, i0);
+        return {
+          i0,
+          i1: i0,
+          u: 0,
+          t: Number(arr[i0]) || 0,
+          lat: ll ? ll[0] : Number(series.lat?.[i0]),
+          lon: ll ? ll[1] : Number(series.lon?.[i0]),
+          height_m: series.height_m?.[i0] != null ? Number(series.height_m[i0]) : null,
+          elevation_m: series.elevation_m?.[i0] != null ? Number(series.elevation_m[i0]) : null,
+          speed_kmh: series.speed_kmh?.[i0] != null ? Number(series.speed_kmh[i0]) : null,
+          distance_km: series.distance_km?.[i0] != null ? Number(series.distance_km[i0]) : null,
+        };
+      }
+      const i1 = i0 + 1;
+      const t0 = Number(arr[i0]) || 0;
+      const t1 = Number(arr[i1]) || t0;
+      const span = t1 - t0;
+      const u = span > 1e-9 ? Math.max(0, Math.min(1, (tMin - t0) / span)) : 0;
+      const ll0 = seriesPointLatLng(track, i0);
+      const ll1 = seriesPointLatLng(track, i1);
+      const lat0 = ll0 ? ll0[0] : Number(series.lat?.[i0]);
+      const lon0 = ll0 ? ll0[1] : Number(series.lon?.[i0]);
+      const lat1 = ll1 ? ll1[0] : Number(series.lat?.[i1]);
+      const lon1 = ll1 ? ll1[1] : Number(series.lon?.[i1]);
+      return {
+        i0,
+        i1,
+        u,
+        t: t0 + (t1 - t0) * u,
+        lat: lerpNum(lat0, lat1, u),
+        lon: lerpNum(lon0, lon1, u),
+        height_m: lerpNum(series.height_m?.[i0], series.height_m?.[i1], u),
+        elevation_m: lerpNum(series.elevation_m?.[i0], series.elevation_m?.[i1], u),
+        speed_kmh: lerpNum(series.speed_kmh?.[i0], series.speed_kmh?.[i1], u),
+        distance_km: lerpNum(series.distance_km?.[i0], series.distance_km?.[i1], u),
+      };
+    }
+
+    function seriesPosAnnotationFromSample(sample, opts = {}) {
+      if (!sample) return "";
+      const colors = seriesChartColors();
+      const trackLabel = opts.trackLabel ? String(opts.trackLabel) : "";
+      const title = trackLabel
+        ? `${trackLabel} · 起飞后 ${Number(sample.t).toFixed(1)} 分钟`
+        : `起飞后 ${Number(sample.t).toFixed(1)} 分钟`;
+      const rows = [
+        { color: colors.height, label: "高度 (m)", value: formatSeriesNum(sample.height_m, 0) },
+        { color: colors.speed, label: "速度 (km/h)", value: formatSeriesNum(sample.speed_kmh, 1) },
+        { color: colors.distance, label: "累计距离 (km)", value: formatSeriesNum(sample.distance_km, 2) },
+      ];
+      const footer =
+        sample.lat != null && sample.lon != null && Number.isFinite(sample.lat) && Number.isFinite(sample.lon)
+          ? `位置 ${sample.lat.toFixed(5)}, ${sample.lon.toFixed(5)}`
+          : "";
+      const rowsHtml = rows
+        .map(
+          (r) =>
+            `<div class="series-pos-tip-row"><span class="series-pos-tip-swatch" style="background:${r.color}"></span>${r.label}: ${r.value}</div>`
+        )
+        .join("");
+      return (
+        `<div class="series-pos-tip">` +
+        `<div class="series-pos-tip-title">${title}</div>` +
+        rowsHtml +
+        (footer ? `<div class="series-pos-tip-footer">${footer}</div>` : "") +
+        `</div>`
+      );
+    }
+
+    function seriesPosPinInnerHtml(sample, accent, opts = {}) {
+      return (
+        seriesPosAnnotationFromSample(sample, opts) +
+        `<div class="series-pos-dot" style="background:${accent}"></div>`
+      );
+    }
+
+    function compareTrackPosLabel(track) {
+      if (!track) return "";
+      return `#${track.id}`;
+    }
+
+    function seriesAltForSample(track, sample) {
+      if (!sample || sample.lon == null || sample.lat == null) return 0;
+      const { usedDefault120 } = displayHeightsFor3d(track?.series);
+      return absoluteAltitudeFor3d(
+        sample.lon,
+        sample.lat,
+        sample.height_m,
+        sample.elevation_m,
+        usedDefault120
+      );
+    }
+
+    /**
+     * 在 2D/3D 地图展示时序采样位置（播放 / seek / 悬停插值）。
+     * 口径：每帧更新 marker 坐标；标注 HTML 仅在 i0 变化或 forceTip 时刷新（seriesPlay.lastTipIdx）。
+     * 副作用：创建/移动 seriesPosMarker；3D 模式下更新 WebGL hover 点与屏幕 overlay pin。
+     */
+    function showSeriesPosSample(track, sample, opts = {}) {
+      if (!map || !track || !sample) return;
+      if (selectedTrackId !== track.id || !shouldShowTrack(track)) {
+        clearPrimarySeriesPosMarker();
+        return;
+      }
+      if (sample.lat == null || sample.lon == null || !Number.isFinite(sample.lat) || !Number.isFinite(sample.lon)) {
+        clearPrimarySeriesPosMarker();
+        return;
+      }
+      const ll = [sample.lat, sample.lon];
+      const accent = compareActive
+        ? compareTrackColor(track.id)
+        : (css("--accent") || "#2563EB");
+      const tipOpts = compareActive ? { trackLabel: compareTrackPosLabel(track) } : {};
+      const tipIdx = sample.i0;
+      const needTip = opts.forceTip || tipIdx !== seriesPlay.lastTipIdx;
+      if (seriesPosMarker) {
+        seriesPosMarker.setLatLng(ll);
+        if (needTip) {
+          const root = seriesPosMarker.getElement()?.querySelector?.(".series-pos-pin");
+          if (root) root.innerHTML = seriesPosPinInnerHtml(sample, accent, tipOpts);
+        }
+      } else {
+        const pin = document.createElement("div");
+        pin.className = "series-pos-pin";
+        pin.innerHTML = seriesPosPinInnerHtml(sample, accent, tipOpts);
+        seriesPosMarker = L.marker(ll, {
+          interactive: false,
+          keyboard: false,
+          zIndexOffset: 800,
+          icon: L.divIcon({
+            className: "series-pos-divicon",
+            html: pin.outerHTML,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0],
+          }),
+        }).addTo(map);
+        seriesPlay.lastTipIdx = tipIdx;
+      }
+      if (needTip) seriesPlay.lastTipIdx = tipIdx;
+
+      if (in3dMode && map3d && map3dReady) {
+        const alt = seriesAltForSample(track, sample);
+        seriesPos3dState = { lng: sample.lon, lat: sample.lat, alt, accent };
+        clearSeriesPos3dBead();
+        // 对比模式由 showCompareExtraPosMarkers 统一挂多珠；单轨仍用单珠
+        if (!compareActive) {
+          selectedTrack3dLineLayer?.setHoverPoint?.(sample.lon, sample.lat, alt, accent);
+        }
+        if (!seriesPos3dEl) {
+          seriesPos3dEl = document.createElement("div");
+          seriesPos3dEl.className = "series-pos-pin series-pos-3d-pin";
+          seriesPos3dEl.innerHTML = seriesPosPinInnerHtml(sample, accent, tipOpts);
+          const host = map3d.getCanvasContainer() || map3d.getContainer();
+          host.appendChild(seriesPos3dEl);
+        } else if (needTip) {
+          seriesPos3dEl.innerHTML = seriesPosPinInnerHtml(sample, accent, tipOpts);
+        }
+        ensureSeriesPos3dRenderHook();
+        updateSeriesPos3dPinScreen();
+      } else if (!compareActive) {
+        clearSeriesPos3dMarker();
+      }
+    }
+
+    function showSeriesPosMarker(track, dataIndex) {
+      if (!map || !track) return;
+      if (selectedTrackId !== track.id || !shouldShowTrack(track)) {
+        clearPrimarySeriesPosMarker();
+        return;
+      }
+      const sample = seriesInterpAtTime(track, Number(track.series?.t_min?.[dataIndex]) || 0);
+      if (!sample) {
+        clearPrimarySeriesPosMarker();
+        return;
+      }
+      // 悬停时贴齐离散点
+      sample.i0 = dataIndex;
+      sample.i1 = dataIndex;
+      sample.u = 0;
+      sample.t = Number(track.series?.t_min?.[dataIndex]) || sample.t;
+      sample.height_m = track.series?.height_m?.[dataIndex] != null
+        ? Number(track.series.height_m[dataIndex]) : sample.height_m;
+      sample.speed_kmh = track.series?.speed_kmh?.[dataIndex] != null
+        ? Number(track.series.speed_kmh[dataIndex]) : sample.speed_kmh;
+      sample.distance_km = track.series?.distance_km?.[dataIndex] != null
+        ? Number(track.series.distance_km[dataIndex]) : sample.distance_km;
+      const ll = seriesPointLatLng(track, dataIndex);
+      if (ll) {
+        sample.lat = ll[0];
+        sample.lon = ll[1];
+      }
+      seriesPlay.lastTipIdx = -1;
+      showSeriesPosSample(track, sample, { forceTip: true });
+    }
+
+    function updateSeriesPlayUi() {
+      const playBtn = document.getElementById("btn-series-play");
+      const pauseBtn = document.getElementById("btn-series-pause");
+      const timeEl = document.getElementById("series-play-time");
+      const bar = document.getElementById("series-play-bar");
+      const track = seriesChartTrack;
+      const canPlay = !!(track?.series?.t_min?.length >= 2);
+      if (bar) bar.hidden = !canPlay;
+      if (playBtn) playBtn.hidden = !canPlay || seriesPlay.playing;
+      if (pauseBtn) pauseBtn.hidden = !canPlay || !seriesPlay.playing;
+      if (timeEl && track) {
+        const tMax = seriesPlayTMax(track);
+        const tNow = seriesPlay.cursorVisible ? seriesPlay.tCursor : 0;
+        timeEl.textContent = `T+${tNow.toFixed(2)} / ${tMax.toFixed(1)} min`;
+      }
+    }
+
+    function updateSeriesPlayCursorDom() {
+      const el = document.getElementById("series-play-cursor");
+      if (!el) return;
+      if (!trackSeriesChart || !seriesPlay.cursorVisible || !seriesChartTrack) {
+        el.hidden = true;
+        return;
+      }
+      const { top, bottom } = trackSeriesChart.chartArea || {};
+      if (top == null || bottom == null) {
+        el.hidden = true;
+        return;
+      }
+      let x = null;
+      const xScale = trackSeriesChart.scales?.x;
+      // 线性时间轴（对比图）：按 tCursor 取像素；category 轴（单轨 labels）不能把时间值当索引传给 getPixelForValue
+      const useLinearTime = xScale?.type === "linear"
+        && typeof xScale.getPixelForValue === "function"
+        && Number.isFinite(seriesPlay.tCursor);
+      if (useLinearTime) {
+        x = xScale.getPixelForValue(seriesPlay.tCursor);
+      } else {
+        const meta = trackSeriesChart.getDatasetMeta(0);
+        const pts = meta?.data;
+        if (pts?.length) {
+          const i0 = Math.max(0, Math.min(pts.length - 1, seriesPlay.index | 0));
+          const i1 = Math.min(pts.length - 1, i0 + 1);
+          const p0 = pts[i0];
+          const p1 = pts[i1];
+          if (p0 && typeof p0.x === "number") {
+            const u = i0 === i1 ? 0 : (Number(seriesPlay.frac) || 0);
+            x = p0.x + ((p1?.x ?? p0.x) - p0.x) * u;
+          }
+        }
+      }
+      if (x == null || !Number.isFinite(x)) {
+        el.hidden = true;
+        return;
+      }
+      const canvas = trackSeriesChart.canvas;
+      const chartBox = canvas?.parentElement;
+      // 相对 .track-series-chart：用 canvas 相对父级的偏移 + Chart 内部 CSS 像素
+      const leftBase = canvas && chartBox ? canvas.offsetLeft : 0;
+      const topBase = canvas && chartBox ? canvas.offsetTop : 0;
+      el.hidden = false;
+      el.style.left = `${leftBase + x}px`;
+      el.style.top = `${topBase + top}px`;
+      el.style.height = `${Math.max(0, bottom - top)}px`;
+    }
+
+    function refreshSeriesPlayCursor(opts = {}) {
+      if (!seriesChartTrack && !compareActive) return;
+      const track = seriesChartTrack
+        || (compareActive ? getCompareTracks().find((t) => t.id === selectedTrackId) : null)
+        || (compareActive ? getCompareTracks()[0] : null);
+      if (!track) return;
+      const sample = seriesInterpAtTime(track, seriesPlay.tCursor);
+      if (sample) {
+        seriesPlay.index = sample.i0;
+        seriesPlay.frac = sample.u;
+        if (seriesChartTrack) showSeriesPosSample(seriesChartTrack, sample, opts);
+        else showSeriesPosSample(track, sample, opts);
+      }
+      if (compareActive) showCompareExtraPosMarkers(seriesPlay.tCursor, opts);
+      updateSeriesPlayUi();
+      updateSeriesPlayCursorDom();
+    }
+
+    function seekSeriesPlay(index, opts = {}) {
+      const track = seriesChartTrack;
+      if (!track?.series?.t_min?.length) return;
+      const n = track.series.t_min.length;
+      const idx = Math.max(0, Math.min(n - 1, Number(index) || 0));
+      const t = Number(track.series.t_min[idx]);
+      seriesPlay.tCursor = Number.isFinite(t) ? t : 0;
+      seriesPlay.index = idx;
+      seriesPlay.frac = 0;
+      seriesPlay.cursorVisible = true;
+      seriesPlay.lastTipIdx = -1;
+      if (!opts.keepPlaying && seriesPlay.playing) stopSeriesPlay();
+      refreshSeriesPlayCursor({ forceTip: true });
+    }
+
+    function stopSeriesPlay() {
+      seriesPlay.playing = false;
+      seriesPlay.lastTs = 0;
+      if (seriesPlay.raf) {
+        cancelAnimationFrame(seriesPlay.raf);
+        seriesPlay.raf = 0;
+      }
+      updateSeriesPlayUi();
+    }
+
+    function seriesPlayTick(ts) {
+      if (!seriesPlay.playing || !seriesChartTrack?.series?.t_min?.length) {
+        stopSeriesPlay();
+        return;
+      }
+      if (!seriesPlay.lastTs) seriesPlay.lastTs = ts;
+      const dt = Math.min(0.05, (ts - seriesPlay.lastTs) / 1000);
+      seriesPlay.lastTs = ts;
+      const rate = Number(seriesPlay.rate) || 3;
+      seriesPlay.tCursor += dt * rate;
+      const tMax = seriesPlayTMax(seriesChartTrack);
+      if (seriesPlay.tCursor >= tMax) {
+        seriesPlay.tCursor = tMax;
+        refreshSeriesPlayCursor();
+        stopSeriesPlay();
+        return;
+      }
+      refreshSeriesPlayCursor();
+      seriesPlay.raf = requestAnimationFrame(seriesPlayTick);
+    }
+
+    function startSeriesPlay() {
+      const track = seriesChartTrack;
+      if (!track?.series?.t_min?.length || track.series.t_min.length < 2) return;
+      const tMax = seriesPlayTMax(track);
+      if (seriesPlay.tCursor >= tMax - 1e-6) {
+        seriesPlay.tCursor = Number(track.series.t_min[0]) || 0;
+        seriesPlay.index = 0;
+        seriesPlay.frac = 0;
+        seriesPlay.lastTipIdx = -1;
+      }
+      seriesPlay.playing = true;
+      seriesPlay.cursorVisible = true;
+      seriesPlay.lastTs = 0;
+      updateSeriesPlayUi();
+      refreshSeriesPlayCursor({ forceTip: true });
+      seriesPlay.raf = requestAnimationFrame(seriesPlayTick);
+    }
+
+    function toggleSeriesPlay() {
+      if (seriesPlay.playing) stopSeriesPlay();
+      else startSeriesPlay();
+    }
+
+    function hideTrackSeriesPanel() {
+      const legend = document.getElementById("track-series-legend");
+      if (legend) legend.innerHTML = "";
+      const metricEl = document.getElementById("series-metric-toggles");
+      if (metricEl) metricEl.hidden = true;
+      stopSeriesPlay();
+      seriesPlay.cursorVisible = false;
+      seriesPlay.lastTipIdx = -1;
+      clearSeriesPosMarker();
+      seriesChartTrack = null;
+      if (trackSeriesChart) {
+        trackSeriesChart.destroy();
+        trackSeriesChart = null;
+      }
+      const bar = document.getElementById("series-play-bar");
+      if (bar) bar.hidden = true;
+      const cursor = document.getElementById("series-play-cursor");
+      if (cursor) cursor.hidden = true;
+      undockTrackSeriesDrawer();
+    }
+
+    function bindTrackSeriesLegend(colors) {
+      const legend = document.getElementById("track-series-legend");
+      if (!legend || !trackSeriesChart) return;
+      const items = trackSeriesChart.data.datasets.map((ds, i) => ({
+        index: i,
+        label: ds.label,
+        color: colors[i] || ds.borderColor,
+        checked: trackSeriesChart.isDatasetVisible(i),
+      }));
+      legend.innerHTML = items.map(item => `
+        <label>
+          <input type="checkbox" data-ds="${item.index}" ${item.checked ? "checked" : ""} />
+          <span class="track-series-swatch" style="background:${item.color}"></span>
+          <span>${item.label}</span>
+        </label>
+      `).join("");
+      legend.querySelectorAll("input[type=checkbox]").forEach(input => {
+        input.addEventListener("change", () => {
+          const idx = Number(input.dataset.ds);
+          trackSeriesChart.setDatasetVisibility(idx, input.checked);
+          trackSeriesChart.update();
+        });
+      });
+    }
+
+    function renderTrackSeriesChart(track) {
+      const panel = document.getElementById("track-series-panel");
+      const titleEl = document.getElementById("track-series-title");
+      const metaEl = document.getElementById("track-series-meta");
+      const canvas = document.getElementById("chart-track-series");
+      const legend = document.getElementById("track-series-legend");
+      const metricEl = document.getElementById("series-metric-toggles");
+      if (!panel || !canvas) return;
+      if (metricEl) metricEl.hidden = true;
+
+      const series = track?.series;
+      titleEl.textContent = `飞行 #${track.id} · 时序曲线`;
+      const st = seriesSummaryStats(track);
+      const bits = [
+        track.task_name || null,
+        track.factory || null,
+        st.duration_min != null ? `${st.duration_min} min` : null,
+        st.distance_km != null ? `${Number(st.distance_km).toFixed(1)} km` : null,
+        st.max_height_m != null ? `最高 ${st.max_height_m} m` : null,
+        st.max_speed_kmh != null ? `最快 ${st.max_speed_kmh} km/h` : null,
+      ].filter(Boolean);
+      metaEl.textContent = bits.join(" · ");
+
+      if (!series || !series.t_min || series.t_min.length < 2) {
+        clearSeriesPosMarker();
+        seriesChartTrack = null;
+        if (trackSeriesChart) {
+          trackSeriesChart.destroy();
+          trackSeriesChart = null;
+        }
+        if (legend) legend.innerHTML = "";
+        metaEl.textContent = (bits.length ? bits.join(" · ") + " · " : "") + "暂无时序数据";
+        updateSeriesPlayUi();
+        openTrackSeriesDrawer();
+        return;
+      }
+
+      if (typeof Chart === "undefined") {
+        metaEl.textContent = "Chart.js 未加载，无法绘制时序图";
+        openTrackSeriesDrawer();
+        return;
+      }
+
+      seriesChartTrack = track;
+      stopSeriesPlay();
+      seriesPlay.index = 0;
+      seriesPlay.frac = 0;
+      seriesPlay.tCursor = Number(track.series?.t_min?.[0]) || 0;
+      seriesPlay.cursorVisible = true;
+      seriesPlay.lastTipIdx = -1;
+      clearSeriesPosMarker();
+      const labels = series.t_min.map(v => (v == null ? "" : Number(v).toFixed(1)));
+      const isDark = document.documentElement.dataset.theme === "linear";
+      const c1 = isDark ? "#60A5FA" : "#2563EB";
+      const c2 = isDark ? "#FBBF24" : "#EA580C";
+      const c3 = isDark ? "#34D399" : "#059669";
+      const seriesColors = [c1, c2, c3];
+      const muted = css("--muted") || "#86909C";
+      const grid = isDark ? "rgba(255,255,255,0.06)" : (css("--border") || "#E5E6EB");
+      const fontFamily = "'Inter','Noto Sans SC',sans-serif";
+
+      if (trackSeriesChart) trackSeriesChart.destroy();
+      trackSeriesChart = new Chart(canvas, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "高度 (m)",
+              data: series.height_m,
+              borderColor: c1,
+              backgroundColor: "transparent",
+              fill: false,
+              borderWidth: 2,
+              pointRadius: 2,
+              pointHoverRadius: 6,
+              pointHoverBorderWidth: 2,
+              pointHoverBorderColor: "#fff",
+              pointBackgroundColor: c1,
+              tension: 0.35,
+              yAxisID: "yH",
+            },
+            {
+              label: "速度 (km/h)",
+              data: series.speed_kmh,
+              borderColor: c2,
+              backgroundColor: "transparent",
+              fill: false,
+              borderWidth: 2,
+              pointRadius: 2,
+              pointHoverRadius: 6,
+              pointHoverBorderWidth: 2,
+              pointHoverBorderColor: "#fff",
+              pointBackgroundColor: c2,
+              tension: 0.35,
+              yAxisID: "yV",
+            },
+            {
+              label: "累计距离 (km)",
+              data: series.distance_km,
+              borderColor: c3,
+              backgroundColor: "transparent",
+              fill: false,
+              borderWidth: 2,
+              pointRadius: 2,
+              pointHoverRadius: 6,
+              pointHoverBorderWidth: 2,
+              pointHoverBorderColor: "#fff",
+              pointBackgroundColor: c3,
+              tension: 0.35,
+              yAxisID: "yD",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          interaction: { mode: "index", intersect: false },
+          layout: { padding: { left: 4, right: 8, top: 2, bottom: 0 } },
+          onHover(_evt, elements) {
+            if (seriesPlay.playing) return;
+            if (!elements?.length || !seriesChartTrack) {
+              if (!seriesPlay.cursorVisible) clearSeriesPosMarker();
+              return;
+            }
+            seekSeriesPlay(elements[0].index, { keepPlaying: false });
+          },
+          onClick(_evt, elements) {
+            if (!elements?.length) return;
+            seekSeriesPlay(elements[0].index, { keepPlaying: seriesPlay.playing });
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              enabled: true,
+              titleFont: { family: fontFamily, size: 11 },
+              bodyFont: { family: fontFamily, size: 11 },
+              footerFont: { family: fontFamily, size: 10 },
+              callbacks: {
+                title(items) {
+                  const v = items?.[0]?.label;
+                  return v ? `起飞后 ${v} 分钟` : "";
+                },
+                footer(items) {
+                  const idx = items?.[0]?.dataIndex;
+                  const ll = seriesPointLatLng(seriesChartTrack, idx);
+                  if (!ll) return "";
+                  return `位置 ${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: "时间（分钟）",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: {
+                maxTicksLimit: 10,
+                maxRotation: 0,
+                color: muted,
+                font: { family: fontFamily, size: 9 },
+              },
+              grid: { color: grid },
+            },
+            yH: {
+              type: "linear",
+              position: "left",
+              title: {
+                display: true,
+                text: "高度 m",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: { color: muted, font: { family: fontFamily, size: 9 }, maxTicksLimit: 6 },
+              grid: { color: grid },
+            },
+            yV: {
+              type: "linear",
+              position: "right",
+              title: {
+                display: true,
+                text: "速度 km/h",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: { color: muted, font: { family: fontFamily, size: 9 }, maxTicksLimit: 6 },
+              grid: { drawOnChartArea: false },
+            },
+            yD: {
+              type: "linear",
+              position: "right",
+              offset: true,
+              title: {
+                display: true,
+                text: "距离 km",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: { color: muted, font: { family: fontFamily, size: 9 }, maxTicksLimit: 6 },
+              grid: { drawOnChartArea: false },
+            },
+          },
+        },
+      });
+      if (!canvas.dataset.seriesLeaveBound) {
+        canvas.dataset.seriesLeaveBound = "1";
+        canvas.addEventListener("mouseleave", () => {
+          if (!seriesPlay.playing && !seriesPlay.cursorVisible) clearSeriesPosMarker();
+          else if (!seriesPlay.playing && seriesPlay.cursorVisible) refreshSeriesPlayCursor({ forceTip: true });
+        });
+      }
+      bindTrackSeriesLegend(seriesColors);
+      updateSeriesPlayUi();
+      openTrackSeriesDrawer({
+        onOpened: () => {
+          if (seriesChartTrack === track) seekSeriesPlay(0);
+        },
+      });
+    }
+
+    function compareMetricLabel(metric) {
+      if (metric === "speed") return "速度 (km/h)";
+      if (metric === "distance") return "累计距离 (km)";
+      return "高度 (m)";
+    }
+
+    function compareMetricSeries(track, metric) {
+      const s = track?.series;
+      if (!s?.t_min?.length) return null;
+      if (metric === "speed") return s.speed_kmh;
+      if (metric === "distance") return s.distance_km;
+      return s.height_m;
+    }
+
+    function seekSeriesPlayByTime(tMin, opts = {}) {
+      const track = seriesChartTrack;
+      if (!track?.series?.t_min?.length) return;
+      const t = Number(tMin);
+      seriesPlay.tCursor = Number.isFinite(t) ? t : 0;
+      const sample = seriesInterpAtTime(track, seriesPlay.tCursor);
+      seriesPlay.index = sample?.i0 ?? 0;
+      seriesPlay.frac = sample?.u ?? 0;
+      seriesPlay.cursorVisible = true;
+      seriesPlay.lastTipIdx = -1;
+      if (!opts.keepPlaying && seriesPlay.playing) stopSeriesPlay();
+      refreshSeriesPlayCursor({ forceTip: true });
+    }
+
+    function renderCompareSeriesChart() {
+      const panel = document.getElementById("track-series-panel");
+      const titleEl = document.getElementById("track-series-title");
+      const metaEl = document.getElementById("track-series-meta");
+      const canvas = document.getElementById("chart-track-series");
+      const legend = document.getElementById("track-series-legend");
+      const metricEl = document.getElementById("series-metric-toggles");
+      if (!panel || !canvas) return;
+
+      const tracks = getCompareTracks();
+      if (metricEl) {
+        metricEl.hidden = false;
+        metricEl.querySelectorAll(".filter-btn").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.metric === compareMetric);
+        });
+      }
+      titleEl.textContent = `多轨对比 · ${tracks.length} 条`;
+      const withSeries = tracks.filter((t) => t.series?.t_min?.length >= 2);
+      const skipped = tracks.length - withSeries.length;
+      metaEl.textContent = [
+        compareMetricLabel(compareMetric),
+        skipped > 0 ? `${skipped} 条无时序（仅摘要）` : null,
+        compareTrackIds.length ? `#${compareTrackIds.join(" / #")}` : null,
+      ].filter(Boolean).join(" · ");
+
+      if (!withSeries.length) {
+        clearSeriesPosMarker();
+        seriesChartTrack = tracks.find((t) => t.id === selectedTrackId) || tracks[0] || null;
+        if (trackSeriesChart) {
+          trackSeriesChart.destroy();
+          trackSeriesChart = null;
+        }
+        if (legend) legend.innerHTML = "";
+        updateSeriesPlayUi();
+        openTrackSeriesDrawer();
+        return;
+      }
+
+      if (typeof Chart === "undefined") {
+        metaEl.textContent = "Chart.js 未加载，无法绘制时序图";
+        openTrackSeriesDrawer();
+        return;
+      }
+
+      const focus = tracks.find((t) => t.id === selectedTrackId) || withSeries[0];
+      seriesChartTrack = focus?.series?.t_min?.length >= 2
+        ? focus
+        : withSeries[0];
+      stopSeriesPlay();
+      seriesPlay.index = 0;
+      seriesPlay.frac = 0;
+      seriesPlay.tCursor = Number(seriesChartTrack.series?.t_min?.[0]) || 0;
+      seriesPlay.cursorVisible = true;
+      seriesPlay.lastTipIdx = -1;
+      clearSeriesPosMarker();
+
+      const isDark = document.documentElement.dataset.theme === "linear";
+      const muted = css("--muted") || "#86909C";
+      const grid = isDark ? "rgba(255,255,255,0.06)" : (css("--border") || "#E5E6EB");
+      const fontFamily = "'Inter','Noto Sans SC',sans-serif";
+      const yTitle = compareMetricLabel(compareMetric);
+      const colors = [];
+      const datasets = withSeries.map((t) => {
+        const color = compareTrackColor(t.id);
+        colors.push(color);
+        const ys = compareMetricSeries(t, compareMetric) || [];
+        const data = [];
+        for (let i = 0; i < t.series.t_min.length; i++) {
+          const x = Number(t.series.t_min[i]);
+          const y = ys[i] != null ? Number(ys[i]) : null;
+          if (!Number.isFinite(x)) continue;
+          data.push({ x, y: Number.isFinite(y) ? y : null });
+        }
+        return {
+          label: `#${t.id}${t.factory ? " · " + t.factory : ""}`,
+          data,
+          borderColor: color,
+          backgroundColor: "transparent",
+          fill: false,
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBorderWidth: 2,
+          pointHoverBorderColor: "#fff",
+          pointBackgroundColor: color,
+          tension: 0.25,
+          spanGaps: true,
+        };
+      });
+
+      if (trackSeriesChart) trackSeriesChart.destroy();
+      trackSeriesChart = new Chart(canvas, {
+        type: "line",
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          parsing: false,
+          interaction: { mode: "nearest", axis: "x", intersect: false },
+          layout: { padding: { left: 4, right: 8, top: 2, bottom: 0 } },
+          onHover(_evt, elements) {
+            if (seriesPlay.playing) return;
+            if (!elements?.length || !seriesChartTrack) {
+              if (!seriesPlay.cursorVisible) clearSeriesPosMarker();
+              return;
+            }
+            const ds = trackSeriesChart.data.datasets[elements[0].datasetIndex];
+            const pt = ds?.data?.[elements[0].index];
+            if (pt && Number.isFinite(pt.x)) seekSeriesPlayByTime(pt.x, { keepPlaying: false });
+          },
+          onClick(_evt, elements) {
+            if (!elements?.length) return;
+            const ds = trackSeriesChart.data.datasets[elements[0].datasetIndex];
+            const pt = ds?.data?.[elements[0].index];
+            if (pt && Number.isFinite(pt.x)) {
+              seekSeriesPlayByTime(pt.x, { keepPlaying: seriesPlay.playing });
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              enabled: true,
+              titleFont: { family: fontFamily, size: 11 },
+              bodyFont: { family: fontFamily, size: 11 },
+              callbacks: {
+                title(items) {
+                  const x = items?.[0]?.parsed?.x;
+                  return Number.isFinite(x) ? `起飞后 ${Number(x).toFixed(1)} 分钟` : "";
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              type: "linear",
+              title: {
+                display: true,
+                text: "时间（分钟）",
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: {
+                maxTicksLimit: 10,
+                color: muted,
+                font: { family: fontFamily, size: 9 },
+              },
+              grid: { color: grid },
+            },
+            y: {
+              type: "linear",
+              title: {
+                display: true,
+                text: yTitle,
+                color: muted,
+                font: { family: fontFamily, size: 10 },
+              },
+              ticks: { color: muted, font: { family: fontFamily, size: 9 }, maxTicksLimit: 6 },
+              grid: { color: grid },
+            },
+          },
+        },
+      });
+      if (!canvas.dataset.seriesLeaveBound) {
+        canvas.dataset.seriesLeaveBound = "1";
+        canvas.addEventListener("mouseleave", () => {
+          if (!seriesPlay.playing && !seriesPlay.cursorVisible) clearSeriesPosMarker();
+          else if (!seriesPlay.playing && seriesPlay.cursorVisible) refreshSeriesPlayCursor({ forceTip: true });
+        });
+      }
+      bindTrackSeriesLegend(colors);
+      updateSeriesPlayUi();
+      openTrackSeriesDrawer({
+        onOpened: () => {
+          if (seriesChartTrack) seekSeriesPlayByTime(seriesPlay.tCursor || 0);
+        },
+      });
+    }
+
+    /**
+     * 清除选中态并重置关联 UI（时序抽屉、3D 细管、详情卡、列表高亮）。
+     * 副作用：hideTrackSeriesPanel、clearSelectedTrack3dGeometry、refreshLayers、renderTrackList。
+     */
+    function clearTrackSelection() {
+      selectedTrackId = null;
+      hoverTrackId = null;
+      soloTrackMode = false;
+      compareActive = false;
+      compareTrackIds = [];
+      comparePickMode = false;
+      updateCompareActionButtons();
+      const metricEl = document.getElementById("series-metric-toggles");
+      if (metricEl) metricEl.hidden = true;
+      hideTrackSeriesPanel();
+      hideMap3dTrackInfo();
+      clearSelectedTrack3dGeometry();
+      if (in3dMode) syncMap3dOverlays();
+      refreshLayers();
+      renderTrackList();
+      setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+    }
+
+    function fitTrackIntoView(line) {
+      if (!map || !line) return;
+      map.invalidateSize({ animate: false });
+      const bounds = line.getBounds();
+      if (!bounds.isValid()) return;
+      map.fitBounds(bounds, {
+        paddingTopLeft: [56, 130],
+        paddingBottomRight: [56, 72],
+        maxZoom: 15,
+        animate: true,
+      });
+    }
+
+    function scheduleFitCompareTracks() {
+      const run = () => {
+        if (!map || !compareActive) return;
+        const bounds = L.latLngBounds([]);
+        let has = false;
+        for (const id of compareTrackIds) {
+          const entry = getTrackLineEntry(id);
+          if (entry?.line) {
+            const b = entry.line.getBounds();
+            if (b.isValid()) {
+              bounds.extend(b);
+              has = true;
+            }
+          } else {
+            const t = MAP_DATA?.tracks.find((x) => x.id === id);
+            if (t?.coords?.length) {
+              t.coords.forEach((c) => {
+                bounds.extend([c[1], c[0]]);
+                has = true;
+              });
+            }
+          }
+        }
+        if (!has || !bounds.isValid()) return;
+        map.invalidateSize({ animate: false });
+        map.fitBounds(bounds, {
+          paddingTopLeft: [56, 130],
+          paddingBottomRight: [56, 72],
+          maxZoom: 15,
+          animate: true,
+        });
+      };
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          run();
+          setTimeout(run, 280);
+          setTimeout(run, 520);
+        });
+      });
+    }
+
+    function scheduleFitSelectedTrack(id) {
+      if (compareActive) {
+        scheduleFitCompareTracks();
+        return;
+      }
+      const run = () => {
+        if (!map || selectedTrackId !== id) return;
+        const entry = getTrackLineEntry(id);
+        const line = entry?.line;
+        const t = MAP_DATA?.tracks.find(x => x.id === id);
+        if (line) fitTrackIntoView(line);
+        else if (t && t.coords.length) {
+          map.invalidateSize({ animate: false });
+          map.setView([t.coords[0][1], t.coords[0][0]], 14);
+        }
+      };
+      // 等时序面板撑开与 smooth scroll 大致完成后适配（多拍校正）
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          run();
+          setTimeout(run, 280);
+          setTimeout(run, 520);
+        });
+      });
+    }
+
+    /**
+     * 选中轨迹并联动列表、图层、时序图、详情卡与视野适配。
+     * 口径：不自动 solo、不自动开 3D；3D 细管仅当 prefer3dView 已为真时 syncSelectedTrackTo3d。
+     * 副作用：refreshLayers、renderTrackSeriesChart、showMap3dTrackInfo、scheduleFitSelectedTrack。
+     */
+    function focusTrack(id, opts = {}) {
+      if (comparePickMode) {
+        if (id === selectedTrackId) {
+          cancelComparePick();
+          return;
+        }
+        startCompare(id);
+        return;
+      }
+      if (compareActive && !compareTrackIds.includes(id)) {
+        exitCompare({ refresh: false });
+      }
+      selectedTrackId = id;
+      hoverTrackId = null;
+      refreshLayers();
+      renderTrackList();
+
+      const t = MAP_DATA.tracks.find(x => x.id === id);
+
+      if (compareActive) {
+        if (t) {
+          renderCompareSeriesChart();
+          showCompareTrackInfo(false);
+        }
+        document.getElementById("section-map")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        const activeEl = document.querySelector(`.track-item[data-id="${id}"]`);
+        activeEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        if (opts.fromCompareTable || opts.easeToFocus) {
+          if (prefer3dView) syncSelectedTrackTo3d({ animateCamera: true, easeToFocus: true });
+        } else if (prefer3dView) {
+          syncSelectedTrackTo3d({ animateCamera: false });
+        }
+        return;
+      }
+
+      if (t) {
+        const metricEl = document.getElementById("series-metric-toggles");
+        if (metricEl) metricEl.hidden = true;
+        renderTrackSeriesChart(t);
+        showMap3dTrackInfo(t, false);
+      } else {
+        hideTrackSeriesPanel();
+        hideMap3dTrackInfo();
+      }
+      document.getElementById("section-map")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const activeEl = document.querySelector(`.track-item[data-id="${id}"]`);
+      activeEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      scheduleFitSelectedTrack(id);
+      if (prefer3dView) syncSelectedTrackTo3d({ animateCamera: true });
+      else clearSelectedTrack3dGeometry();
+    }
+
+    function enterSoloTrackMode() {
+      if (selectedTrackId === null || compareActive) return;
+      soloTrackMode = true;
+      refreshLayers();
+      updateTrackListMeta();
+    }
+
+    /* ========================================================================
+     * UI 绑定与初始化（IntersectionObserver 惰性加载）
+     * ======================================================================== */
+
+    function bindMapUi() {
+      ["layer-airports", "layer-coverage", "layer-tracks", "layer-district", "layer-region-only"].forEach(id => {
+        document.getElementById(id)?.addEventListener("change", () => {
+          updateFilterCountBadge();
+          updateFilterStatus();
+          renderTrackList();
+          refreshLayers();
+        });
+      });
+      document.getElementById("layer-buildings-3d")?.addEventListener("change", () => {
+        syncMap3dBuildingsVisibility();
+      });
+      document.getElementById("layer-view-3d")?.addEventListener("change", (e) => {
+        set3dViewEnabled(!!e.target.checked);
+      });
+      document.getElementById("layer-terrain")?.addEventListener("change", (e) => {
+        setTerrainEnabled(!!e.target.checked);
+      });
+      document.getElementById("btn-reset-view")?.addEventListener("click", fitDefaultView);
+      document.getElementById("btn-solo-track")?.addEventListener("click", enterSoloTrackMode);
+      document.getElementById("btn-clear-selection")?.addEventListener("click", clearTrackSelection);
+      document.getElementById("btn-add-compare")?.addEventListener("click", onAddCompareClick);
+      document.getElementById("btn-exit-compare")?.addEventListener("click", () => {
+        exitCompare({ refresh: true, animateCamera: true });
+      });
+      document.getElementById("series-metric-toggles")?.addEventListener("click", (e) => {
+        const btn = e.target?.closest?.("[data-metric]");
+        if (!btn) return;
+        setCompareMetric(btn.dataset.metric);
+      });
+      document.getElementById("btn-show-series")?.addEventListener("click", () => reopenTrackSeriesPanel());
+      document.getElementById("btn-toggle-series")?.addEventListener("click", () => toggleTrackSeriesDrawer());
+      document.getElementById("btn-series-play")?.addEventListener("click", () => startSeriesPlay());
+      document.getElementById("btn-series-pause")?.addEventListener("click", () => stopSeriesPlay());
+      document.getElementById("series-play-rate")?.addEventListener("change", (e) => {
+        seriesPlay.rate = Number(e.target.value) || 3;
+      });
+      document.getElementById("btn-reset-filters")?.addEventListener("click", resetTrackFilters);
+      document.getElementById("track-search")?.addEventListener("input", e => {
+        trackSearchQuery = e.target.value;
+        renderTrackList();
+      });
+      document.getElementById("track-sort")?.addEventListener("change", e => {
+        trackSortKey = e.target.value;
+        renderTrackList();
+      });
+    }
+
+    const savedTheme = localStorage.getItem("dashboard-theme");
+    if (savedTheme) {
+      document.documentElement.dataset.theme = savedTheme;
+    }
+
+    bindMapUi();
+    // 独立页：直接 fetch map_data.json 并 initMap。
+    // 嵌入 dashboard 时 build_dashboard.py 会去掉此 fetch，改由 IntersectionObserver（watchMapSection）惰性 bootMapSection。
+    fetch("map_data.json")
+      .then(r => {
+        if (!r.ok) throw new Error("无法读取 map_data.json，请先运行 build_dashboard.py");
+        return r.json();
+      })
+      .then(json => {
+        if (!json) throw new Error("无可用地图数据");
+        MAP_DATA = json;
+        setMapStatus(
+          `时间范围：${json.meta.date_range.start} ~ ${json.meta.date_range.end}`,
+        );
+        renderFactoryFilters();
+        updateFilterStatus();
+        renderTrackList();
+        if (typeof L === "undefined") {
+          throw new Error("Leaflet 未加载，请检查网络");
+        }
+        initMap();
+      })
+      .catch(err => {
+        setMapStatus("数据加载失败：" + err.message, true);
+        console.error(err);
+      });
+  </script>
+</body>
+</html>

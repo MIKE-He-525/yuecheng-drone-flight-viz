@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="saas">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>越城区无人机飞行服务 · 数据看板</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── 共用结构 ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      transition: background 0.35s ease, color 0.35s ease;
+    }
+    .app { max-width: 100%; margin: 0 auto; padding: 12px 16px 16px; }
+    header {
+      display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 10px; margin-bottom: 12px;
+    }
+    .brand h1 { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.02em; color: var(--heading); }
+    .brand p { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .theme-switcher {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .theme-btn {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 0.72rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .theme-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-text);
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 10px 12px;
+      transition: background 0.35s, border-color 0.35s, box-shadow 0.35s;
+    }
+    .card.linear-border {
+      border: 1px solid transparent;
+      background-clip: padding-box;
+      position: relative;
+    }
+    .card.linear-border::before {
+      content: "";
+      position: absolute; inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .kpi-card { display: flex; align-items: center; gap: 10px; }
+    .kpi-icon {
+      width: 34px; height: 34px; border-radius: var(--radius-sm);
+      display: grid; place-items: center;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    .kpi-label { font-size: 0.72rem; color: var(--muted); line-height: 1.2; }
+    .kpi-value { font-size: 1.25rem; font-weight: 700; color: var(--heading); line-height: 1.15; }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 1100px) { .charts-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 640px) { .charts-grid { grid-template-columns: 1fr; } .span-2 { grid-column: span 1; } }
+    .chart-card h3 {
+      font-size: 0.8rem; font-weight: 600;
+      color: var(--heading); margin-bottom: 6px;
+    }
+    .chart-wrap { position: relative; height: 190px; }
+    .chart-wrap.compact { height: 170px; }
+    .chart-wrap.tasks { height: 320px; }
+    .span-2 { grid-column: span 2; }
+    .span-all { grid-column: 1 / -1; }
+    .charts-pair {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      min-width: 0;
+      align-items: stretch;
+    }
+    @media (max-width: 900px) {
+      .charts-pair { grid-template-columns: 1fr; }
+    }
+    .notes-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      max-height: 360px;
+      overflow: hidden;
+    }
+    .notes-card-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 2px;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .notes-card h4 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--heading);
+      margin: 10px 0 4px;
+    }
+    .notes-card h4:first-of-type { margin-top: 0; }
+    .notes-card .notes-list {
+      margin: 0;
+      padding-left: 1.1em;
+    }
+    .notes-card .notes-list li { margin: 4px 0; }
+    .notes-card .notes-list strong { color: var(--heading); }
+    .notes-card .notes-foot {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      font-size: 0.68rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .notes-card .notes-foot strong { color: var(--heading); }
+
+    /* ── 1. Claude · 暖调人文复古 ── */
+    [data-theme="claude"] {
+      --bg: #F4F1EA;
+      --surface: #FAF9F5;
+      --heading: #191919;
+      --text: #191919;
+      --muted: #B1ADA1;
+      --border: #E0DDD4;
+      --accent: #C15F3C;
+      --accent-text: #FAF9F5;
+      --accent-soft: rgba(193, 95, 60, 0.12);
+      --shadow: 0 2px 12px rgba(25, 25, 25, 0.06);
+      --radius: 10px;
+      --radius-sm: 8px;
+      --chart-1: #C15F3C;
+      --chart-2: #8B7355;
+      --chart-3: #B1ADA1;
+      --chart-4: #D4A574;
+      --positive: #5C7A4A;
+      --negative: #A84432;
+    }
+
+    /* ── 2. Material 3 · 动态有色灰 ── */
+    [data-theme="material"] {
+      --bg: #F8F9FA;
+      --surface: #FFFFFF;
+      --heading: #202124;
+      --text: #202124;
+      --muted: #5F6368;
+      --border: #E8EAED;
+      --accent: #1A73E8;
+      --accent-text: #FFFFFF;
+      --accent-soft: rgba(26, 115, 232, 0.10);
+      --shadow: 0 2px 12px rgba(26, 115, 232, 0.08);
+      --radius: 16px;
+      --radius-sm: 12px;
+      --chart-1: #1A73E8;
+      --chart-2: #FD7E14;
+      --chart-3: #34A853;
+      --chart-4: #9334E6;
+      --positive: #34A853;
+      --negative: #EA4335;
+    }
+
+    /* ── 3. Vercel · 极致硬核克制 ── */
+    [data-theme="vercel"] {
+      --bg: #FFFFFF;
+      --surface: #FAFAFA;
+      --heading: #171717;
+      --text: #171717;
+      --muted: #666666;
+      --border: #EBEBEB;
+      --accent: #171717;
+      --accent-text: #FFFFFF;
+      --accent-soft: #F5F5F5;
+      --shadow: none;
+      --radius: 6px;
+      --radius-sm: 4px;
+      --chart-1: #171717;
+      --chart-2: #0070F3;
+      --chart-3: #666666;
+      --chart-4: #F9CB28;
+      --positive: #0070F3;
+      --negative: #E00;
+    }
+    [data-theme="vercel"] .theme-btn.active {
+      background: #171717; border-color: #171717; color: #fff;
+    }
+    [data-theme="vercel"] .theme-btn:hover {
+      background: #171717; color: #fff; border-color: #171717;
+    }
+
+    /* ── 4. Linear · 暗黑生产力 ── */
+    [data-theme="linear"] {
+      --bg: #121316;
+      --surface: #1C1D20;
+      --heading: #F4F5F8;
+      --text: #E8E9ED;
+      --muted: #8A8F98;
+      --border: rgba(255,255,255,0.06);
+      --accent: #5E6AD2;
+      --accent-text: #FFFFFF;
+      --accent-soft: rgba(94, 106, 210, 0.15);
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --chart-1: #5E6AD2;
+      --chart-2: #8B5CF6;
+      --chart-3: #22D3EE;
+      --chart-4: #F4F5F8;
+      --positive: #4ADE80;
+      --negative: #F87171;
+    }
+
+    /* ── 5. SaaS · 清爽商务蓝 ── */
+    [data-theme="saas"] {
+      --bg: #F5F7FA;
+      --surface: #FFFFFF;
+      --heading: #1D2129;
+      --text: #4E5969;
+      --muted: #86909C;
+      --border: #E5E6EB;
+      --accent: #165DFF;
+      --accent-text: #FFFFFF;
+      --accent-soft: rgba(22, 93, 255, 0.08);
+      --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      --radius: 10px;
+      --radius-sm: 8px;
+      --chart-1: #165DFF;
+      --chart-2: #4080FF;
+      --chart-3: #6AA1FF;
+      --chart-4: #94BFFF;
+      --positive: #00B42A;
+      --negative: #F53F3F;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <h1>越城区无人机飞行服务</h1>
+        <p id="meta-range">数据加载中…</p>
+      </div>
+      <div class="theme-switcher" role="tablist" aria-label="色调切换">
+        <button class="theme-btn" data-theme="claude" role="tab">Claude · 暖调复古</button>
+        <button class="theme-btn" data-theme="material" role="tab">Material 3</button>
+        <button class="theme-btn" data-theme="vercel" role="tab">Vercel · 墨水</button>
+        <button class="theme-btn" data-theme="linear" role="tab">Linear · 暗黑</button>
+        <button class="theme-btn active" data-theme="saas" role="tab">SaaS · 商务蓝</button>
+      </div>
+    </header>
+
+    <section class="kpi-grid" id="kpi-grid"></section>
+
+    <section class="charts-grid">
+      <div class="card chart-card span-2">
+        <h3>飞行次数 — 按月趋势</h3>
+        <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>飞行类型分布</h3>
+        <div class="chart-wrap compact"><canvas id="chart-flytype"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>飞行记录 — 厂商分布</h3>
+        <div class="chart-wrap compact"><canvas id="chart-factory-rec"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>机场设备 — 厂商分布</h3>
+        <div class="chart-wrap compact"><canvas id="chart-factory-apt"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>飞行时长分布（≤60 分钟）</h3>
+        <div class="chart-wrap compact"><canvas id="chart-duration"></canvas></div>
+      </div>
+      <div class="charts-pair">
+        <div class="card chart-card">
+          <h3>任务飞行 Top 12</h3>
+          <div class="chart-wrap tasks"><canvas id="chart-tasks"></canvas></div>
+        </div>
+        <div class="card chart-card notes-card">
+          <h3>数据解读与法律备注</h3>
+          <div class="notes-card-body">
+            <h4>数据解读</h4>
+            <ul class="notes-list">
+              <li><strong>规模：</strong>记录 3,298 条、机场 36 个、航线模板 786 条；可画轨迹约 563 条（灰轨约 213：有遥测无记录）。航线数 ≠ 执行量。</li>
+              <li><strong>时间：</strong>月趋势按记录可至 2026-05，可画轨迹约至 2025-04；后半段无轨迹不宜解读为活动骤降。</li>
+              <li><strong>口径：</strong>类型/厂商按记录表；灰轨不计入图中。机场厂商与飞行厂商不可直接对照。时长图截断 ≤60 分钟。</li>
+              <li><strong>用途：</strong>「行政区内轨迹」为点占比 ≥50% 的统计规则，非空域合规结论。仅供运营分析，不作执法依据。</li>
+            </ul>
+            <h4>法律备注</h4>
+            <p style="margin:0 0 4px;color:var(--muted);font-size:0.68rem">
+              《民用航空法》（2026-07-01 施行）。无人驾驶航空器另有国务院、中央军委规定的，从其规定（第 258 条）。
+            </p>
+            <ul class="notes-list">
+              <li><strong>第 34 条</strong>：无人驾驶航空器设计/生产/进口/维修/飞行原则上须适航许可；产品应有唯一识别码。</li>
+              <li><strong>第 61 条</strong>：机场及周边划定无人驾驶航空器管制空域并公布；机场应具备防范处置能力。</li>
+              <li><strong>第 73–77、82 条</strong>：空域统一管理；管制空域飞行须许可；禁区/限制区不得违规进入。</li>
+              <li><strong>第 157–161 条</strong>：通用航空定义；经营性须运营许可，非经营性备案；应投保第三人责任险等。</li>
+              <li><strong>第 225 条</strong>：优化低空空域配置，建设监管服务平台，促进低空经济。</li>
+            </ul>
+            <p class="notes-foot">
+              本看板仅供监测分析，<strong>不构成</strong>许可或合规结论。行政区统计 ≠ 法定可飞空域（见地图「数据说明」）。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!--
+    总览看板模板（build_dashboard.py 拼入 dashboard.html）
+    职责：KPI、统计图表、任务 Top、数据解读；主题切换；fetch data.json
+  -->
+  <script>
+    /* ---------- 主题与 Chart.js 工具 ---------- */
+    const THEMES = ["claude", "material", "vercel", "linear", "saas"];
+    let DATA = null;
+    let charts = {};
+
+    /** KPI 卡片元数据（与 data.json.kpis 字段对应） */
+    const KPI_META = [
+      { key: "flights", label: "飞行记录", icon: "✈" },
+      { key: "airports", label: "机场点位", icon: "⌂" },
+      { key: "telemetry", label: "有效遥测点", icon: "◎" },
+      { key: "routes", label: "预定义航线", icon: "⤴" },
+    ];
+
+    /** 读取当前主题 CSS 变量 */
+    function css(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function chartColors() {
+      return [css("--chart-1"), css("--chart-2"), css("--chart-3"), css("--chart-4"), css("--muted")];
+    }
+
+    function isDark() {
+      return document.documentElement.dataset.theme === "linear";
+    }
+
+    function gridColor() {
+      return isDark() ? "rgba(255,255,255,0.06)" : css("--border");
+    }
+
+    /** 销毁已有 Chart 实例（换主题时重建） */
+    function destroyCharts() {
+      Object.values(charts).forEach(c => c.destroy());
+      charts = {};
+    }
+
+    /** Chart.js 共用坐标轴/图例样式（随主题 CSS 变量） */
+    function baseOptions() {
+      const muted = css("--muted");
+      const text = css("--text");
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: { color: text, font: { family: "'Inter','Noto Sans SC',sans-serif" } },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: muted, maxRotation: 45, font: { size: 9 }, maxTicksLimit: 12 },
+            grid: { color: gridColor() },
+          },
+          y: {
+            ticks: { color: muted, font: { size: 9 }, maxTicksLimit: 6 },
+            grid: { color: gridColor() },
+          },
+        },
+      };
+    }
+
+    /** 渲染顶部 KPI 四卡 */
+    function renderKPIs() {
+      const grid = document.getElementById("kpi-grid");
+      grid.innerHTML = KPI_META.map(k => `
+        <div class="card kpi-card ${document.documentElement.dataset.theme === "linear" ? "linear-border" : ""}">
+          <div class="kpi-icon">${k.icon}</div>
+          <div>
+            <div class="kpi-label">${k.label}</div>
+            <div class="kpi-value">${DATA.kpis[k.key].toLocaleString()}</div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    /** 渲染月趋势 / 类型 / 厂商 / 时长 / Top 任务图表 */
+    function renderCharts() {
+      destroyCharts();
+      const colors = chartColors();
+      const accent = css("--accent");
+      const accent2 = css("--chart-2");
+      const opts = baseOptions();
+
+      charts.monthly = new Chart(document.getElementById("chart-monthly"), {
+        type: "line",
+        data: {
+          labels: DATA.monthly.labels,
+          datasets: [{
+            label: "飞行次数",
+            data: DATA.monthly.values,
+            borderColor: accent,
+            backgroundColor: accent + (document.documentElement.dataset.theme === "saas" ? "33" : "22"),
+            fill: true,
+            tension: 0.35,
+            pointRadius: 2,
+            borderWidth: 2,
+            pointBackgroundColor: accent,
+          }],
+        },
+        options: { ...opts, plugins: { ...opts.plugins, legend: { display: false } } },
+      });
+
+      const flyLabels = Object.keys(DATA.fly_type);
+      const flyValues = Object.values(DATA.fly_type);
+      charts.flytype = new Chart(document.getElementById("chart-flytype"), {
+        type: "doughnut",
+        data: {
+          labels: flyLabels,
+          datasets: [{ data: flyValues, backgroundColor: colors, borderWidth: 0 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: { color: css("--text"), padding: 4, boxWidth: 10, font: { size: 10 } },
+            },
+          },
+        },
+      });
+
+      charts.factoryRec = new Chart(document.getElementById("chart-factory-rec"), {
+        type: "bar",
+        data: {
+          labels: Object.keys(DATA.factory_record),
+          datasets: [{
+            label: "飞行次数",
+            data: Object.values(DATA.factory_record),
+            backgroundColor: colors,
+            borderRadius: document.documentElement.dataset.theme === "material" ? 12 : 4,
+          }],
+        },
+        options: { ...opts, plugins: { ...opts.plugins, legend: { display: false } } },
+      });
+
+      const factoryAptColors = { "大疆": accent2, "一电": accent, "纵横": colors[2] };
+      charts.factoryApt = new Chart(document.getElementById("chart-factory-apt"), {
+        type: "bar",
+        data: {
+          labels: Object.keys(DATA.factory_airport),
+          datasets: [{
+            label: "设备数量",
+            data: Object.values(DATA.factory_airport),
+            backgroundColor: Object.keys(DATA.factory_airport).map(k => factoryAptColors[k] || colors[3]),
+            borderRadius: 4,
+          }],
+        },
+        options: { ...opts, plugins: { ...opts.plugins, legend: { display: false } } },
+      });
+
+      const taskLabels = DATA.top_tasks.labels;
+      const taskAxisWidth = taskLabels.length
+        ? Math.max(...taskLabels.map(l => l.length)) * 11 + 24
+        : 120;
+
+      charts.tasks = new Chart(document.getElementById("chart-tasks"), {
+        type: "bar",
+        data: {
+          labels: taskLabels,
+          datasets: [{
+            label: "次数",
+            data: DATA.top_tasks.values,
+            backgroundColor: accent,
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: "y",
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              ticks: { color: css("--muted"), font: { size: 9 } },
+              grid: { color: gridColor() },
+            },
+            y: {
+              ticks: {
+                color: css("--muted"),
+                font: { size: 10 },
+                autoSkip: false,
+              },
+              grid: { color: gridColor() },
+              afterFit(scale) {
+                scale.width = Math.max(scale.width, taskAxisWidth);
+              },
+            },
+          },
+        },
+      });
+
+      charts.duration = new Chart(document.getElementById("chart-duration"), {
+        type: "bar",
+        data: {
+          labels: DATA.duration.labels,
+          datasets: [{
+            label: "频次",
+            data: DATA.duration.values,
+            backgroundColor: accent,
+            borderRadius: { topLeft: 4, topRight: 4 },
+          }],
+        },
+        options: {
+          ...opts,
+          plugins: { ...opts.plugins, legend: { display: false } },
+        },
+      });
+    }
+
+    /** Linear 主题下为卡片加渐变描边 */
+    function applyLinearBorder() {
+      document.querySelectorAll(".card").forEach(el => {
+        el.classList.toggle("linear-border", document.documentElement.dataset.theme === "linear");
+      });
+    }
+
+    /** 切换主题：写 localStorage，并重绘 KPI/图表（地图底图由 map 段监听） */
+    function setTheme(name) {
+      document.documentElement.dataset.theme = name;
+      document.querySelectorAll(".theme-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.theme === name);
+      });
+      localStorage.setItem("dashboard-theme", name);
+      if (DATA) {
+        renderKPIs();
+        applyLinearBorder();
+        renderCharts();
+      }
+    }
+
+    document.querySelectorAll(".theme-btn").forEach(btn => {
+      btn.addEventListener("click", () => setTheme(btn.dataset.theme));
+    });
+
+    const savedTheme = localStorage.getItem("dashboard-theme");
+    if (savedTheme && THEMES.includes(savedTheme)) setTheme(savedTheme);
+
+    /* 独立打开 index.html 时拉取 data.json；打包进 dashboard.html 后由 ROUTER 注入 */
+    fetch("data.json")
+      .then(r => {
+        if (!r.ok) throw new Error("无法读取 data.json，请先运行 build_dashboard.py");
+        return r.json();
+      })
+      .then(json => {
+        if (!json) throw new Error("无可用数据");
+        DATA = json;
+        document.getElementById("meta-range").textContent =
+          `时间范围：${json.meta.date_range.start} ~ ${json.meta.date_range.end}`;
+        document.getElementById("meta-range").style.color = "";
+        renderKPIs();
+        applyLinearBorder();
+        if (typeof Chart === "undefined") {
+          throw new Error("Chart.js 未加载，请检查网络");
+        }
+        renderCharts();
+      })
+      .catch(err => {
+        document.getElementById("meta-range").textContent = "数据加载失败：" + err.message;
+        document.getElementById("meta-range").style.color = "var(--negative, #F53F3F)";
+        console.error(err);
+      });
+  </script>
+</body>
+</html>

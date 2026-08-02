@@ -1,0 +1,806 @@
+/* =============================================================================
+ * 地图区样式（map.html 引用；build_dashboard.py 打包时注入 dashboard.html）
+ * 结构：全宽地图段 → 左栏筛选列表 → 右栏图层/地图/时序抽屉
+ * ============================================================================= */
+
+    /* --- 地图段外壳（全宽 100vh） --- */
+    .map-section {
+      width: 100vw;
+      position: relative;
+      left: 50%;
+      right: 50%;
+      margin-left: -50vw;
+      margin-right: -50vw;
+      margin-top: 12px;
+      height: 100vh;
+      min-height: 100vh;
+      padding: 0;
+      border: none;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      box-sizing: border-box;
+    }
+    .map-section-header {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .map-section-header-main {
+      display: flex; flex-wrap: wrap; align-items: baseline;
+      justify-content: space-between; gap: 8px;
+    }
+    .map-section-header h2 {
+      font-size: 0.95rem; font-weight: 700; color: var(--heading);
+    }
+    .map-section-header .sub {
+      font-size: 0.72rem; color: var(--muted);
+    }
+    .map-term-note {
+      font-size: 0.7rem;
+      line-height: 1.45;
+      color: var(--muted);
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .map-term-note strong {
+      color: var(--heading);
+      font-weight: 600;
+    }
+    /* --- 左右分栏（左筛选列表 / 右地图列） --- */
+    .layout {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      flex: 1;
+      min-height: 0;
+      height: auto;
+      border: none;
+      border-radius: 0;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    @media (max-width: 1100px) {
+      .layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(50vh, 1fr);
+      }
+    }
+
+    /* --- 右栏：图层横条 + 地图 --- */
+    .map-column {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+    }
+    .layer-bar {
+      flex-shrink: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .layer-bar-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--heading);
+      white-space: nowrap;
+    }
+    .layer-bar .layer-list {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 14px;
+      flex: 1;
+      min-width: 0;
+    }
+    .layer-bar .layer-list label {
+      white-space: nowrap;
+    }
+    .layer-bar #btn-reset-view {
+      width: auto;
+      margin: 0;
+      flex-shrink: 0;
+    }
+
+    /* --- 左栏：筛选面板 + 轨迹列表 --- */
+    .track-rail {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+      min-height: 0;
+      scrollbar-gutter: stable;
+    }
+    .track-rail-filters {
+      flex: 0 0 auto;
+      max-height: none;
+      overflow: visible;
+    }
+    .track-rail-filters .panel-filters {
+      padding: 10px;
+    }
+    .track-list-section {
+      flex: 1 1 auto;
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .filter-status {
+      font-size: 0.62rem;
+      color: var(--muted);
+      line-height: 1.4;
+      padding: 6px 8px;
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .filter-status-chips {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+    }
+    .filter-chip {
+      font-size: 0.6rem; padding: 2px 6px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent);
+      border: 1px solid transparent;
+    }
+    .list-toolbar {
+      display: flex; gap: 6px; align-items: center;
+    }
+    .list-toolbar input, .list-toolbar select {
+      flex: 1; min-width: 0;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); border-radius: var(--radius-sm);
+      padding: 4px 6px; font-size: 0.65rem; font-family: inherit;
+    }
+    .list-toolbar select { flex: 0 0 auto; max-width: 88px; }
+    .track-item.dimmed { opacity: 0.45; }
+    .track-actions { display: flex; gap: 4px; margin-top: 4px; }
+    .track-actions .filter-btn { flex: 1; text-align: center; }
+    @media (max-width: 1100px) {
+      .track-rail {
+        height: auto;
+        max-height: min(70vh, 560px);
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+    .track-rail-header h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--heading);
+      line-height: 1.3;
+    }
+    .track-rail-header p {
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    #btn-solo-track, #btn-clear-selection, #btn-show-series, #btn-exit-compare, #btn-add-compare { display: none; }
+    #btn-solo-track.visible, #btn-clear-selection.visible, #btn-show-series.visible, #btn-exit-compare.visible, #btn-add-compare.visible { display: block; }
+    #btn-add-compare:disabled { opacity: 0.45; cursor: not-allowed; }
+    #btn-add-compare.pick-active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .track-item {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+      line-height: 1.35;
+    }
+    .track-item.compare-pick-target .track-item-title { color: var(--accent); }
+    .track-item.compare-active-row {
+      box-shadow: inset 3px 0 0 var(--compare-swatch, var(--accent));
+    }
+    .series-metric-toggles {
+      display: flex; flex-wrap: wrap; gap: 4px; flex-shrink: 0;
+    }
+    .series-metric-toggles[hidden] { display: none !important; }
+    .series-metric-toggles .filter-btn { padding: 2px 8px; }
+    .compare-summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.65rem;
+      line-height: 1.35;
+    }
+    .compare-summary-table th,
+    .compare-summary-table td {
+      padding: 3px 4px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .compare-summary-table th { color: var(--muted); font-weight: 500; }
+    .compare-summary-table tr.compare-focus td { background: var(--accent-soft); }
+    .compare-summary-table tr[data-id] { cursor: pointer; pointer-events: auto; }
+    .compare-summary-swatch {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .map3d-track-info.compare-mode {
+      width: min(320px, calc(100% - 100px));
+      max-height: min(48%, 280px);
+      pointer-events: auto;
+    }
+    .map3d-track-info.compare-mode .map3d-track-info-body {
+      display: block;
+    }
+
+    .panel-filters h3 {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    }
+
+    .panel {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 10px;
+    }
+    .panel h3 { font-size: 0.78rem; font-weight: 600; color: var(--heading); margin-bottom: 8px; }
+
+    .layer-list { display: flex; flex-direction: column; gap: 6px; }
+    .layer-list label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; cursor: pointer;
+    }
+    .layer-list input { accent-color: var(--accent); }
+
+    .filter-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .filter-btn {
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); padding: 3px 8px; border-radius: 999px;
+      font-size: 0.68rem; cursor: pointer;
+    }
+    .filter-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+    .filter-section { margin-top: 6px; }
+    .filter-section:first-child { margin-top: 0; }
+    .filter-label {
+      font-size: 0.65rem; font-weight: 600; color: var(--muted);
+      margin-bottom: 2px; display: flex; justify-content: space-between; align-items: baseline;
+      gap: 6px;
+    }
+    .filter-count-badge { font-weight: 500; color: var(--accent); font-size: 0.62rem; }
+    .range-values {
+      font-weight: 500; color: var(--heading); font-size: 0.58rem;
+      font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
+    }
+    /* --- 双拖柄滑块（起飞时间 / 时长 / 距离 / 高度 / 速度） --- */
+    .dual-range {
+      position: relative; height: 26px; margin-top: 2px;
+    }
+    .range-track {
+      position: absolute; left: 7px; right: 7px; top: 50%;
+      transform: translateY(-50%);
+      height: 4px; background: var(--border); border-radius: 999px;
+      pointer-events: none; overflow: hidden;
+    }
+    .range-fill {
+      position: absolute; left: 0; top: 0; height: 100%; width: 100%;
+      background: var(--accent); border-radius: 999px; opacity: 0.5;
+    }
+    .dual-range input[type="range"] {
+      position: absolute; left: 0; right: 0; top: 0;
+      width: 100%; height: 26px; margin: 0;
+      background: transparent; pointer-events: none;
+      -webkit-appearance: none; appearance: none;
+    }
+    .dual-range input[type="range"].range-min { z-index: 3; }
+    .dual-range input[type="range"].range-max { z-index: 4; }
+    .dual-range input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px; background: transparent; border: none;
+    }
+    .dual-range input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; pointer-events: auto;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      margin-top: -5px; cursor: grab;
+    }
+    .dual-range input[type="range"]::-moz-range-track {
+      height: 4px; background: transparent; border: none;
+    }
+    .dual-range input[type="range"]::-moz-range-thumb {
+      pointer-events: auto;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      cursor: grab;
+    }
+    .filter-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .filter-actions button {
+      flex: 1; border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); padding: 5px 8px; border-radius: var(--radius-sm);
+      font-size: 0.65rem; cursor: pointer;
+    }
+    .filter-actions button.primary {
+      background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+    }
+    .track-item.hidden { display: none; }
+
+    .panel-tracks {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+
+    .track-list {
+      flex: 1;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      font-size: 0.68rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .track-item-title {
+      display: block;
+      color: var(--heading);
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .track-item-meta {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.65rem;
+    }
+    .track-item:hover, .track-item.active, .track-item.hovering { background: var(--accent-soft); }
+    .track-item:last-child { border-bottom: none; }
+
+    /* --- Leaflet / MapLibre 叠层容器 --- */
+    .map-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      height: auto;
+    }
+    @media (max-width: 1100px) { .map-wrap { min-height: 50vh; } }
+    #map {
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      transition: opacity 0.35s ease;
+    }
+    #map3d {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+    }
+    .map-wrap.is-3d #map {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .map-wrap.is-3d #map3d {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .map3d-hint {
+      position: absolute;
+      /* 详情卡下方；无详情时仍可用 */
+      top: auto;
+      bottom: 12px;
+      left: 12px;
+      z-index: 2;
+      max-width: min(420px, calc(100% - 24px));
+      margin: 0;
+      padding: 8px 10px;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: var(--heading);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow);
+      pointer-events: none;
+    }
+    .map3d-hint[hidden] { display: none !important; }
+
+    /* --- 选中轨右上角详情卡（2D/3D 共用） --- */
+    .map3d-track-info {
+      position: absolute;
+      top: 12px;
+      right: 12px; /* 2D 右上角；3D 见下方 */
+      left: auto;
+      z-index: 5;
+      width: min(220px, calc(100% - 100px));
+      max-height: min(36%, 220px);
+      overflow: auto;
+      margin: 0;
+      padding: 8px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      pointer-events: none;
+    }
+    .map-wrap.is-3d .map3d-track-info {
+      right: 52px; /* 避开 MapLibre 右上角导航 / 地形控件 */
+    }
+    .map3d-track-info[hidden] { display: none !important; }
+    .map3d-track-info-title {
+      display: block;
+      margin: 0 0 6px;
+      padding-left: 8px;
+      font-size: 0.78rem;
+      color: var(--heading);
+      line-height: 1.3;
+      word-break: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .map3d-track-info-body {
+      margin: 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 2px 8px;
+      font-size: 0.7rem;
+      line-height: 1.4;
+    }
+    .map3d-track-info-body dt {
+      margin: 0;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .map3d-track-info-body dd {
+      margin: 0;
+      color: var(--text);
+      word-break: break-word;
+    }
+    .map3d-track-info-hint {
+      margin: 6px 0 0;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border);
+      font-size: 0.65rem;
+      line-height: 1.35;
+      color: var(--muted);
+    }
+    .map3d-track-info-hint[hidden] { display: none !important; }
+
+    /* 时序抽屉打开时地图图例仍可显示（抽屉占位，不再叠在曲线上） */
+    .map-legend {
+      position: absolute; bottom: 24px; left: 12px; z-index: 1000;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 8px 10px;
+      font-size: 0.68rem; box-shadow: var(--shadow);
+    }
+    .map-legend div { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .map-legend div:first-child { margin-top: 0; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .line-sample { width: 18px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+    /* 底部抽屉：占位收缩地图；收起时仅保留箭头条 */
+    .track-series-panel {
+      position: relative;
+      flex: 0 0 auto;
+      z-index: 8;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      height: 0;
+      max-height: 0;
+      min-height: 0;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      background: var(--bg);
+      box-shadow: none;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition:
+        height 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+        max-height 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+        min-height 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+        padding 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.28s ease,
+        visibility 0.38s,
+        box-shadow 0.32s ease;
+      will-change: height, max-height, opacity;
+    }
+    /* 有选中轨：停靠底部，至少露出箭头 */
+    .track-series-panel.docked {
+      height: 28px;
+      max-height: 28px;
+      min-height: 28px;
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.06);
+    }
+    .track-series-panel.docked.visible {
+      height: min(42%, 300px);
+      max-height: min(48%, 340px);
+      min-height: 220px;
+      gap: 0;
+      padding: 0 0 10px;
+      box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.08);
+    }
+    .series-drawer-toggle {
+      appearance: none;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 28px;
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .series-drawer-toggle:hover {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .series-drawer-chevron {
+      display: block;
+      width: 10px;
+      height: 10px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(-135deg); /* 默认朝上：收起态，点击展开 */
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      margin-top: 3px;
+    }
+    .track-series-panel.visible .series-drawer-chevron {
+      transform: rotate(45deg); /* 朝下：展开态，点击收起 */
+      margin-top: -3px;
+    }
+    .track-series-drawer-body {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+      min-height: 0;
+      padding: 0 12px;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
+    }
+    .track-series-panel.visible .track-series-drawer-body {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .track-series-panel,
+      .series-drawer-chevron,
+      .track-series-drawer-body {
+        transition-duration: 0.01ms;
+      }
+    }
+    .track-series-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .series-play-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      margin: 0 0 12px;
+      padding: 0 0 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .series-play-bar[hidden] { display: none !important; }
+    .series-play-btn {
+      appearance: none;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: var(--accent-text);
+      transition: filter 0.15s, opacity 0.15s;
+    }
+    .series-play-btn:hover { filter: brightness(1.06); }
+    .series-play-btn:active { filter: brightness(0.96); }
+    .series-play-rate-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    .series-play-rate-label select {
+      font-size: 0.7rem;
+      padding: 2px 4px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+      color: var(--text);
+    }
+    .series-play-time {
+      font-size: 0.72rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--heading);
+    }
+    .track-series-header h3 {
+      font-size: 0.8rem; font-weight: 600; color: var(--heading); margin: 0;
+    }
+    .track-series-header .series-meta {
+      font-size: 0.68rem; color: var(--muted); margin-left: 8px; font-weight: 400;
+    }
+    .track-series-header .header-left { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; min-width: 0; }
+    .track-series-body {
+      display: grid;
+      grid-template-columns: 160px minmax(0, 1fr);
+      gap: 10px;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      align-items: stretch;
+    }
+    @media (max-width: 700px) {
+      .track-series-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+    }
+    .track-series-legend.panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px;
+      margin: 0;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+    }
+    .track-series-legend h3 {
+      font-size: 0.78rem; font-weight: 600; color: var(--heading); margin-bottom: 8px;
+    }
+    .track-series-legend .layer-list label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; cursor: pointer; color: var(--text);
+    }
+    .track-series-legend .layer-list input { accent-color: var(--accent); }
+    .track-series-swatch {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .track-series-chart {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 6px 8px;
+      cursor: crosshair;
+      overflow: hidden;
+    }
+    .series-play-cursor {
+      position: absolute;
+      width: 0;
+      border-left: 1.5px dashed var(--accent);
+      pointer-events: none;
+      opacity: 0.85;
+      z-index: 2;
+      transform: translateX(-0.75px);
+    }
+    .series-play-cursor[hidden] { display: none !important; }
+    .track-series-empty {
+      font-size: 0.72rem; color: var(--muted); padding: 24px 8px; text-align: center;
+    }
+
+    /* 地图标注：内容与时序 Chart.js tooltip 一致 */
+    .series-pos-divicon {
+      background: transparent !important;
+      border: none !important;
+    }
+    .series-pos-pin {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+      /* 圆点中心对准经纬（dot 高 18px → 半高 9px） */
+      transform: translate(-50%, calc(-100% + 9px));
+    }
+    .series-pos-3d-pin {
+      position: absolute;
+      left: 0;
+      top: 0;
+      z-index: 5;
+      will-change: transform;
+    }
+    .series-pos-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35), 0 2px 8px rgba(0, 0, 0, 0.35);
+      flex-shrink: 0;
+    }
+    .series-pos-tip {
+      margin-bottom: 6px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      box-shadow: var(--shadow);
+      white-space: nowrap;
+      text-align: left;
+    }
+    .series-pos-tip-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .series-pos-tip-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .series-pos-tip-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .series-pos-tip-footer {
+      margin-top: 4px;
+      opacity: 0.85;
+      font-size: 0.68rem;
+    }
+
+    .maplibregl-popup.map3d-popup .maplibregl-popup-content {
+      font-size: 0.78rem;
+      line-height: 1.45;
+      padding: 10px 12px;
+    }
+    .leaflet-popup-content b { color: #1D2129; }
+    [data-theme="linear"] .leaflet-popup-content b { color: #F4F5F8; }
+    .leaflet-container { background: #E8E8E8; }
+    [data-theme="linear"] .leaflet-container { background: #1A1B1E; }

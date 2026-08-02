@@ -1,0 +1,421 @@
+{
+  "meta": {
+    "generated_at": "2026-07-13 13:38:56 +0800",
+    "script": "clean_data.py",
+    "input_dir": "D:\\coding\\DataPreprocessing\\越城无人机数据+字段描述",
+    "output_dir": "D:\\coding\\DataPreprocessing\\clean_data",
+    "options": {
+      "drop_no_message_time": true,
+      "add_integrity_flags": true
+    }
+  },
+  "sources": {
+    "fly_record": {
+      "file": "越城区无人机飞行服务飞行数据记录信息.csv",
+      "rows": 3298
+    },
+    "fly_telemetry": {
+      "directory": "越城区无人机飞行服务飞行数据上报信息-csv",
+      "file_count": 10,
+      "files": [
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息1.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息10.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息2.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息3.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息4.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息5.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息6.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息7.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息8.csv",
+          "rows": 10000
+        },
+        {
+          "file": "越城区无人机飞行服务飞行数据上报信息9.csv",
+          "rows": 10000
+        }
+      ],
+      "rows_merged": 100000
+    },
+    "airport": {
+      "file": "越城区无人机飞行服务机场点位信息1.csv",
+      "rows": 36
+    },
+    "route": {
+      "file": "越城区无人机飞行服务航线信息.csv",
+      "rows": 786
+    }
+  },
+  "pipeline": {
+    "fly_record": {
+      "rows_in": 3298,
+      "rows_out": 3298,
+      "rows_removed": 0,
+      "steps": [
+        {
+          "step": "input",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0
+        },
+        {
+          "step": "filter_not_deleted",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0
+        },
+        {
+          "step": "drop_columns",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0,
+          "columns": [
+            "pilot_id"
+          ]
+        },
+        {
+          "step": "zero_to_null_foreign_keys",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0,
+          "columns": [
+            "mission_id",
+            "task_id",
+            "task_record_id"
+          ]
+        },
+        {
+          "step": "type_conversion",
+          "rows_before": 3298,
+          "rows_after": 3298,
+          "removed": 0
+        }
+      ]
+    },
+    "fly_telemetry": {
+      "rows_in": 100000,
+      "rows_out": 92815,
+      "rows_removed": 7185,
+      "steps": [
+        {
+          "step": "input",
+          "rows_before": 100000,
+          "rows_after": 100000,
+          "removed": 0
+        },
+        {
+          "step": "filter_not_deleted",
+          "rows_before": 100000,
+          "rows_after": 100000,
+          "removed": 0
+        },
+        {
+          "step": "drop_columns",
+          "rows_before": 100000,
+          "rows_after": 100000,
+          "removed": 0,
+          "columns": [
+            "ext_info"
+          ]
+        },
+        {
+          "step": "zero_to_null_mission_id",
+          "rows_before": 100000,
+          "rows_after": 100000,
+          "removed": 0
+        },
+        {
+          "step": "drop_no_message_time",
+          "rows_before": 100000,
+          "rows_after": 92815,
+          "removed": 7185,
+          "reason": "message_time 为空或无法解析"
+        },
+        {
+          "step": "expand_battery_info",
+          "rows_before": 92815,
+          "rows_after": 92815,
+          "removed": 0,
+          "columns_added": 8
+        },
+        {
+          "step": "type_conversion",
+          "rows_before": 92815,
+          "rows_after": 92815,
+          "removed": 0
+        },
+        {
+          "step": "audit_zero_zero_gps",
+          "rows_before": 92815,
+          "rows_after": 92815,
+          "removed": 0,
+          "reason": "经纬度 (0,0) 视为无效 GPS，不删除行；无效 20 条，缺失经纬度 0 条，有效 GPS 92795 条",
+          "columns": [
+            "longitude",
+            "latitude"
+          ],
+          "zero_zero_points": 20,
+          "rows_missing_gps": 0,
+          "valid_gps_points": 92795
+        }
+      ]
+    },
+    "airport": {
+      "rows_in": 36,
+      "rows_out": 36,
+      "rows_removed": 0,
+      "steps": [
+        {
+          "step": "input",
+          "rows_before": 36,
+          "rows_after": 36,
+          "removed": 0
+        },
+        {
+          "step": "filter_not_deleted",
+          "rows_before": 36,
+          "rows_after": 36,
+          "removed": 0
+        },
+        {
+          "step": "drop_columns",
+          "rows_before": 36,
+          "rows_after": 36,
+          "removed": 0,
+          "columns": [
+            "update_time",
+            "area_name",
+            "area_code",
+            "model_id"
+          ]
+        },
+        {
+          "step": "type_conversion",
+          "rows_before": 36,
+          "rows_after": 36,
+          "removed": 0
+        }
+      ]
+    },
+    "route": {
+      "rows_in": 786,
+      "rows_out": 786,
+      "rows_removed": 0,
+      "steps": [
+        {
+          "step": "input",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0
+        },
+        {
+          "step": "drop_columns",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0,
+          "columns": [
+            "drone_sub_type",
+            "heading_angle"
+          ]
+        },
+        {
+          "step": "filter_is_delete",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0
+        },
+        {
+          "step": "zero_to_null_sentinel_int",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0,
+          "columns": {
+            "mission_version": 301,
+            "mission_application": 761
+          }
+        },
+        {
+          "step": "zero_to_null_sentinel_float",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0,
+          "columns": {
+            "endurance": 65,
+            "distance": 65,
+            "pitch": 630
+          }
+        },
+        {
+          "step": "type_conversion",
+          "rows_before": 786,
+          "rows_after": 786,
+          "removed": 0
+        }
+      ]
+    }
+  },
+  "integrity": {
+    "fly_record.mission_id_valid": {
+      "False": 2339,
+      "True": 959
+    },
+    "fly_record.dock_sn_valid": {
+      "True": 3081,
+      "False": 217
+    },
+    "fly_telemetry.fly_record_id_valid": {
+      "True": 68860,
+      "False": 23955
+    },
+    "fly_telemetry.mission_id_valid": {
+      "False": 59706,
+      "True": 33109
+    },
+    "fly_telemetry.valid_gps_points": 92795,
+    "fly_telemetry.distinct_fly_record_ids": 565
+  },
+  "quality": {
+    "policy": {
+      "fly_record_id": "保留全部遥测行，不删除 fly_record_id 无法关联 fly_record.id 的记录；添加布尔列 fly_record_id_valid 供下游过滤。（对应 数据说明.md 7.6：可选排除，默认仅标注）",
+      "endurance_mission_fields": "route 表 endurance / distance / mission_version / mission_application 的哨兵值 0 清洗为 NULL，保留行。"
+    },
+    "fields": {
+      "route.endurance": {
+        "null": 65,
+        "non_null": 721,
+        "null_pct": 8.3
+      },
+      "route.distance": {
+        "null": 65,
+        "non_null": 721,
+        "null_pct": 8.3
+      },
+      "route.mission_version": {
+        "null": 301,
+        "non_null": 485,
+        "null_pct": 38.3
+      },
+      "route.mission_application": {
+        "null": 761,
+        "non_null": 25,
+        "null_pct": 96.8
+      },
+      "route.factory_code": {
+        "null": 81,
+        "non_null": 705,
+        "null_pct": 10.3
+      },
+      "fly_record.factory_code": {
+        "null": 12,
+        "non_null": 3286,
+        "null_pct": 0.4
+      },
+      "fly_record.mission_id": {
+        "null": 2072,
+        "non_null": 1226,
+        "null_pct": 62.8
+      },
+      "fly_record.dock_sn": {
+        "null": 112,
+        "non_null": 3186,
+        "null_pct": 3.4
+      },
+      "airport.factory_code": {
+        "null": 0,
+        "non_null": 36,
+        "null_pct": 0.0
+      },
+      "fly_record.factory_code_values": {
+        "YD": 2244,
+        "DJ": 1042,
+        "NULL": 12
+      },
+      "airport.factory_code_values": {
+        "DJ": 15,
+        "YD": 13,
+        "ZH": 8
+      },
+      "route.factory_code_values": {
+        "DJ": 433,
+        "YD": 272,
+        "NULL": 81
+      }
+    },
+    "rows": {
+      "fly_telemetry.invalid_fly_record_id": {
+        "invalid_rows": 23955,
+        "invalid_pct": 25.8,
+        "distinct_invalid_ids": 213,
+        "sample_invalid_ids": [
+          132,
+          133,
+          134,
+          135,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          148,
+          149,
+          150,
+          151,
+          152
+        ]
+      },
+      "fly_telemetry.invalid_mission_id": {
+        "rows_with_mission_id": 51494,
+        "invalid_mission_id_rows": 18385
+      }
+    },
+    "gps": {
+      "telemetry_rows_total": 92815,
+      "rows_missing_gps": 0,
+      "zero_zero_points": 20,
+      "valid_gps_points": 92795,
+      "distinct_fly_record_ids_valid_gps": 564,
+      "tracks_with_ge_2_points": 563,
+      "tracks_with_1_point": 1,
+      "note": "有效 GPS = 经纬度非空且非 (0,0)。看板「轨迹」数 = tracks_with_ge_2_points（至少 2 点方可画线）。行政区内/外见 admin。"
+    },
+    "admin": {
+      "district_adcode": 330602,
+      "district_name": "越城区",
+      "geojson_file": "yuecheng_330602.geojson",
+      "valid_gps_points": 92795,
+      "in_district_points": 79014,
+      "out_of_district_points": 13781,
+      "in_district_pct": 85.1
+    }
+  }
+}
